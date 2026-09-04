@@ -1814,6 +1814,22 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
      */
     this.switchSource = function(name) {
       if (!sources[name]) return;
+      // Yarross: auto-activate trial for VIP sources
+      if (sources[name].vip && !Lampa.Storage.get('zpremkey', '')) {
+        var _this = this;
+        Lampa.Noty.show('Активируем Yarross Premium...');
+        zpremTrial(function(ok, reason){
+          if (ok) {
+            zpremActivate();
+            Lampa.Noty.show('Yarross Premium активирован! Перезагрузка...');
+            setTimeout(function(){ location.reload(); }, 2000);
+          } else {
+            Lampa.Noty.show('Ошибка активации: ' + (reason || 'unknown'));
+            Lampa.Controller.toggle('content');
+          }
+        });
+        return;
+      }
       if (!modern) {
         object.lampac_custom_select = name;
         return this.changeBalanser(name);
@@ -2409,82 +2425,18 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     /**
      * Предложение премиума при выборе VIP-источника.
      */
-    this.vipOffer = function(a) {
-      if (!isRuUser()) {
-        Lampa.Controller.toggle('content');
-        return;
-      }
-      var userEmail = Lampa.Storage.get('account_email', '');
-      var vipPayUrl = ZPREM_PAY_URL + '?email=' + encodeURIComponent(userEmail || '');
-      var trialUsed = Lampa.Storage.get('zprem_trial_used', '');
-      if (!userEmail) {
-        Lampa.Noty.show('Укажите email в настройках аккаунта');
-        return;
-      }
-      var selectItems = [{
-        title: '💳 Купить подписку',
-        action: 'buy'
-      }];
-      if (!trialUsed) {
-        selectItems.push({
-          title: '🎁 Попробовать 48ч бесплатно',
-          action: 'trial'
-        });
-      }
-      Lampa.Select.show({
-        title: '🔒 ' + a.title,
-        items: selectItems,
-        onBack: function() {
+        this.vipOffer = function(a) {
+      // Yarross: auto-activate trial instead of showing pay modal
+      var _this = this;
+      Lampa.Noty.show('Активируем Yarross Premium...');
+      zpremTrial(function(ok, reason){
+        if (ok) {
+          zpremActivate();
+          Lampa.Noty.show('Yarross Premium активирован! Перезагрузка...');
+          setTimeout(function(){ location.reload(); }, 2000);
+        } else {
+          Lampa.Noty.show('Ошибка активации: ' + (reason || 'unknown'));
           Lampa.Controller.toggle('content');
-        },
-        onSelect: function(sel) {
-          if (sel.action === 'buy') {
-            var ua2 = navigator.userAgent.toLowerCase();
-            var isTV2 = ua2.indexOf('tizen') !== -1 || ua2.indexOf('webos') !== -1 || ua2.indexOf('web0s') !== -1 || ua2.indexOf('smart-tv') !== -1 || ua2.indexOf('smarttv') !== -1 || ua2.indexOf('android tv') !== -1 || (typeof window.tizen !== 'undefined') || (typeof window.webOS !== 'undefined');
-            if (isTV2) {
-              var qrS = 200;
-              var qrU = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrS + 'x' + qrS + '&data=' + encodeURIComponent(vipPayUrl) + '&bgcolor=1a1a2e&color=ffffff&format=png';
-              var qrHtml = $('<div style="padding:1.2em;text-align:center;">' +
-                '<div style="font-size:1.3em;margin-bottom:0.5em;opacity:0.8;">Отсканируйте QR-код для оплаты</div>' +
-                '<div style="background:#fff;display:inline-block;padding:10px;border-radius:10px;margin-bottom:0.8em;">' +
-                '<img src="' + qrU + '" width="' + qrS + '" height="' + qrS + '" style="display:block;width:' + qrS + 'px;height:' + qrS + 'px;max-width:' + qrS + 'px;max-height:' + qrS + 'px;object-fit:contain;" />' +
-                '</div>' +
-                '<div style="font-size:1.2em;opacity:0.7;"><a style="color:#fff" href="' + vipPayUrl + '">Перейти по ссылке</a></div>' +
-                '</div>');
-              Lampa.Modal.open({
-                title: 'Yarross Premium',
-                html: qrHtml,
-                onBack: function() {
-                  Lampa.Modal.close();
-                  Lampa.Controller.toggle('content');
-                }
-              });
-            } else {
-              window.open(vipPayUrl, '_blank');
-              Lampa.Controller.toggle('content');
-            }
-          } else if (sel.action === 'trial') {
-            Lampa.Noty.show('Активируем тестовый доступ...');
-            setTimeout(function() {
-              window.zpremTrial(function(ok, reason) {
-                if (ok) {
-                  Lampa.Noty.show('Тестовый доступ на 48ч активирован! Перезагрузка...');
-                  setTimeout(function() {
-                    location.reload();
-                  }, 2000);
-                } else if (reason === 'already_used') {
-                  Lampa.Storage.set('zprem_trial_used', '1');
-                  Lampa.Noty.show('Тестовый период уже был использован');
-                } else if (reason === 'no_data') {
-                  Lampa.Noty.show('Укажите email в настройках аккаунта');
-                } else {
-                  Lampa.Noty.show('Ошибка активации, попробуйте позже');
-                }
-              });
-            }, 300);
-          } else {
-            Lampa.Controller.toggle('content');
-          }
         }
       });
     };
@@ -2510,7 +2462,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       });
       filter.render().find('.filter--search').appendTo(filter.render().find('.torrent-filter'));
       filter.onSelect = function(type, a, b) {
-        if (false && type == 'sort' && sources[a.source] && sources[a.source].vip && !Lampa.Storage.get('zpremkey','')) {
+        if (type == 'sort' && sources[a.source] && sources[a.source].vip && !Lampa.Storage.get('zpremkey','')) {
           Lampa.Select.close();
           _this.vipOffer(a);
           return;
@@ -4823,12 +4775,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             Defined.localhost = ZPREM_SERVER;
             if (callback) callback(true);
           } else {
-            // Yarross: don't clear key on check failure
-            if (callback) callback(true);
+            Lampa.Storage.set('zpremkey', '');
+            Lampa.Storage.set('zprem_expires', '');
+            if (callback) callback(false);
           }
-        } catch(e) { if (callback) callback(true); }
+        } catch(e) { if (callback) callback(false); }
       }, function() {
-        if (callback) callback(true);
+        if (callback) callback(false);
       });
     }
 
@@ -4870,7 +4823,19 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     zpremActivate();
-    if (!Lampa.Storage.get('zpremkey', '')) zpremCheck();
+    if (!Lampa.Storage.get('zpremkey', '')) {
+      zpremCheck(function(hasPrem){
+        if (!hasPrem) {
+          // Yarross: auto-activate trial on startup if no premium
+          zpremTrial(function(ok, reason){
+            if (ok) {
+              zpremActivate();
+              Lampa.Noty.show('Yarross Premium активирован!');
+            }
+          });
+        }
+      });
+    }
 
     // Одна строка в консоли на старте: видно, какой сервер выбран и видит ли
     // плагин аккаунт. Без неё «почему он лезет на премиум» разбирается вслепую.
