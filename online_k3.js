@@ -1,15 +1,5 @@
 (function() {
   'use strict';
-  // === Yarross Logger ===
-  window.yarross_logs = [];
-  function yarrossLog(type, msg) {
-    var entry = { time: new Date().toLocaleTimeString(), type: type, msg: msg };
-    window.yarross_logs.push(entry);
-    if (window.yarross_logs.length > 100) window.yarross_logs.shift();
-    try { console.log('[Yarross][' + type + ']', msg); } catch(e) {}
-  }
-  // === /Logger ===
-
 
   // ===== ES5 polyfills for old devices (Tizen 2.x, WebOS 2.x, etc.) =====
   if (!Array.prototype.find) {
@@ -101,16 +91,16 @@
   // ===== /ES5 polyfills =====
 
   // ===== Random server selection (once per session) =====
-  var YARROSS_SERVERS = [
+  var Z01_SERVERS = [
     'http://s1.z01.online/',
     'http://s2.z01.online/',
     'http://s3.z01.online/'
   ];
-  var YARROSS_FALLBACK = 'http://z01.online/';
-  var YARROSS_PING_TIMEOUT = 1500; // мс — быстрый отсев неотвечающих серверов
+  var Z01_FALLBACK = 'http://z01.online/';
+  var Z01_PING_TIMEOUT = 1500; // мс — быстрый отсев неотвечающих серверов
 
   // «Пинг» через XMLHttpRequest с таймаутом (эндпоинт /t отдаёт статус 200)
-  function yarrossPing(url, callback) {
+  function z01Ping(url, callback) {
     var xhr = new XMLHttpRequest();
     var done = false;
 
@@ -122,7 +112,7 @@
 
     try {
       xhr.open('GET', url, true);
-      xhr.timeout = YARROSS_PING_TIMEOUT;
+      xhr.timeout = Z01_PING_TIMEOUT;
 
       xhr.onload = function() {
         finish(xhr.status >= 200 && xhr.status < 400);
@@ -137,7 +127,7 @@
   }
 
   // Перемешивание (Fisher–Yates)
-  function yarrossShuffle(arr) {
+  function z01Shuffle(arr) {
     var copy = arr.slice();
     for (var i = copy.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -149,16 +139,16 @@
   }
 
   // Выбор сервера: при каждой загрузке страницы, первый живой из случайного порядка
-  function yarrossPickServer(callback) {
-    var candidates = yarrossShuffle(YARROSS_SERVERS);
+  function z01PickServer(callback) {
+    var candidates = z01Shuffle(Z01_SERVERS);
 
     function tryNext(index) {
       if (index >= candidates.length) {
         // никто не ответил — основной домен
-        callback(YARROSS_FALLBACK);
+        callback(Z01_FALLBACK);
         return;
       }
-      yarrossPing(candidates[index], function(ok) {
+      z01Ping(candidates[index], function(ok) {
         if (ok) {
           callback(candidates[index]);
         } else {
@@ -179,14 +169,14 @@
 
   // Живой бесплатный сервер держим отдельно: он нужен и как запасной аэродром,
   // если премиум откажет.
-  var YARROSS_FREE = YARROSS_FALLBACK;
+  var Z01_FREE = Z01_FALLBACK;
 
   // Асинхронно подменяем localhost на выбранный сервер.
   // Если к этому моменту уже активирован премиум (zpremActivate поставил
   // prem.z01.online) — ничего не трогаем.
-  yarrossPickServer(function(server) {
-    YARROSS_FREE = server;
-    if (Defined.localhost === YARROSS_FALLBACK) Defined.localhost = server;
+  z01PickServer(function(server) {
+    Z01_FREE = server;
+    if (Defined.localhost === Z01_FALLBACK) Defined.localhost = server;
   });
 
   // Премиум-сервер спрашивает аккаунт Лампы. Вышел человек из аккаунта — и
@@ -199,7 +189,7 @@
     if (!er || !er.accsdb) return false;
     if (Defined.localhost !== ZPREM_SERVER) return false;
     zprem_dropped = true;
-    Defined.localhost = YARROSS_FREE;
+    Defined.localhost = Z01_FREE;
     return true;
   }
 
@@ -466,22 +456,22 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   var ZPREM_TRIAL_URL = (Lampa.Utils && Lampa.Utils.protocol ? Lampa.Utils.protocol() : 'http://') + 'oplata.z01.online/trial.php';
 
   // ==========================================================================
-  //  Yarross UI — новый интерфейс онлайн-плагина
+  //  Z01 UI — новый интерфейс онлайн-плагина
   //  Герой-блок с продолжением просмотра, ряды чипов (источник / сезон /
   //  озвучка) и список серий карточками. Всё управление вынесено на экран —
   //  скрытые фильтры больше не нужны.
   // ==========================================================================
-  var YarrossUI = {};
+  var Z01UI = {};
 
-  YarrossUI.enabled = function() {
+  Z01UI.enabled = function() {
     return Lampa.Storage.get('z01_ui_mode', 'modern') !== 'classic';
   };
 
-  YarrossUI.REQUEST_TIMEOUT = 20000;  // сколько ждём ответ источника
-  YarrossUI.WATCHDOG = 24;            // сторож обычного запроса, секунд
-  YarrossUI.WATCHDOG_FIRST = 40;      // сторож первой загрузки, секунд
+  Z01UI.REQUEST_TIMEOUT = 20000;  // сколько ждём ответ источника
+  Z01UI.WATCHDOG = 24;            // сторож обычного запроса, секунд
+  Z01UI.WATCHDOG_FIRST = 40;      // сторож первой загрузки, секунд
 
-  YarrossUI.esc = function(str) {
+  Z01UI.esc = function(str) {
     return (str === undefined || str === null ? '' : String(str))
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -490,7 +480,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   };
 
   // --- Короткий значок качества: 1080p -> FHD ---
-  YarrossUI.shortQuality = function(text) {
+  Z01UI.shortQuality = function(text) {
     if (!text) return '';
     text = String(text);
     var match = text.match(/(2160|1440|1080|720|576|480|360)\s*p?/i);
@@ -511,7 +501,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   // Вместо плоской простыни из 15 кнопок сводим переводы к пяти понятным
   // категориям. Категория запоминается глобально: выбрал «Дубляж» — он же
   // подставится и на другом фильме, и на другом источнике.
-  YarrossUI.VOICE_KINDS = [{
+  Z01UI.VOICE_KINDS = [{
     key: 'dub',
     title: 'z01_voice_dub',
     re: /дубляж|дублирован|\bdub\b|\bdubbing\b/i
@@ -539,7 +529,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 
   // Многие источники отдают только название студии, без слова «дубляж»
   // или «многоголосый» — разбираем такие по известным именам.
-  YarrossUI.VOICE_STUDIOS = [{
+  Z01UI.VOICE_STUDIOS = [{
     key: 'mvo',
     re: /lostfilm|лостфильм|tvshows|dniprofilm|невафильм|newstudio|newcomers|baibako|байбако|alexfilm|jaskier|coldfilm|колдфильм|hdrezka|rezkastudio|red head sound|sunshine|amedia|zakadry|закадры|linefilm|le-production|1win|kerob|profix|selena|октопус/i
   }, {
@@ -550,21 +540,21 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     re: /яроцк|гаврилов|володарск|сербин|горчаков|михал[её]в|живов|пучков|гоблин|кураж|дольск|есарев|карповск|визгунов/i
   }];
 
-  YarrossUI.voiceKind = function(title) {
+  Z01UI.voiceKind = function(title) {
     var text = String(title || '');
     var i;
-    for (i = 0; i < YarrossUI.VOICE_KINDS.length; i++) {
-      if (YarrossUI.VOICE_KINDS[i].re.test(text)) return YarrossUI.VOICE_KINDS[i].key;
+    for (i = 0; i < Z01UI.VOICE_KINDS.length; i++) {
+      if (Z01UI.VOICE_KINDS[i].re.test(text)) return Z01UI.VOICE_KINDS[i].key;
     }
-    for (i = 0; i < YarrossUI.VOICE_STUDIOS.length; i++) {
-      if (YarrossUI.VOICE_STUDIOS[i].re.test(text)) return YarrossUI.VOICE_STUDIOS[i].key;
+    for (i = 0; i < Z01UI.VOICE_STUDIOS.length; i++) {
+      if (Z01UI.VOICE_STUDIOS[i].re.test(text)) return Z01UI.VOICE_STUDIOS[i].key;
     }
     return 'other';
   };
 
-  YarrossUI.voiceKindTitle = function(key) {
-    for (var i = 0; i < YarrossUI.VOICE_KINDS.length; i++) {
-      if (YarrossUI.VOICE_KINDS[i].key == key) return Lampa.Lang.translate(YarrossUI.VOICE_KINDS[i].title);
+  Z01UI.voiceKindTitle = function(key) {
+    for (var i = 0; i < Z01UI.VOICE_KINDS.length; i++) {
+      if (Z01UI.VOICE_KINDS[i].key == key) return Lampa.Lang.translate(Z01UI.VOICE_KINDS[i].title);
     }
     return Lampa.Lang.translate('z01_voice_other');
   };
@@ -572,15 +562,15 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   /**
    * Группировка списка озвучек по категориям с сохранением исходных индексов.
    */
-  YarrossUI.voiceGroups = function(list) {
+  Z01UI.voiceGroups = function(list) {
     var order = [];
     var map = {};
     (list || []).forEach(function(entry, index) {
-      var key = YarrossUI.voiceKind(entry.title);
+      var key = Z01UI.voiceKind(entry.title);
       if (!map[key]) {
         map[key] = {
           key: key,
-          title: YarrossUI.voiceKindTitle(key),
+          title: Z01UI.voiceKindTitle(key),
           items: []
         };
         order.push(key);
@@ -593,8 +583,8 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     });
     // порядок категорий — как в VOICE_KINDS, остальное в конец
     var rank = function(key) {
-      for (var i = 0; i < YarrossUI.VOICE_KINDS.length; i++) {
-        if (YarrossUI.VOICE_KINDS[i].key == key) return i;
+      for (var i = 0; i < Z01UI.VOICE_KINDS.length; i++) {
+        if (Z01UI.VOICE_KINDS[i].key == key) return i;
       }
       return 90;
     };
@@ -610,12 +600,12 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * «HDVB ~ 1080p» -> имя «HDVB» + значок «FHD». Качество в названии
    * источника дублировать текстом незачем, оно читается значком.
    */
-  YarrossUI.splitSourceName = function(name) {
+  Z01UI.splitSourceName = function(name) {
     name = String(name || '');
     var badge = '';
     var match = name.match(/\s*[-~–]\s*(2160p?|1440p?|1080p?|720p?|480p?|4k|uhd|fhd|hd)\b[^,]*$/i);
     if (match) {
-      badge = YarrossUI.shortQuality(match[1]);
+      badge = Z01UI.shortQuality(match[1]);
       if (badge) name = name.slice(0, match.index);
     }
     return {
@@ -629,7 +619,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * в одном ряду с переводами. Отличаем строго: только «2 сезон» или
    * «Season 2», чтобы не утащить озвучку вида «Дубляж (2 сезон)».
    */
-  YarrossUI.isSeasonLabel = function(text) {
+  Z01UI.isSeasonLabel = function(text) {
     text = String(text || '').trim();
     return /^\d+\s*(-?[йя])?\s*(сезон|season)$/i.test(text) || /^(сезон|season)\s*\d+$/i.test(text);
   };
@@ -649,10 +639,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * сериалах они отдают мусор или ту же раздачу. Прячем их у сериалов,
    * фильмов это не касается.
    */
-  YarrossUI.MOVIE_ONLY = ['xvideocdnultra', 'xvideocdn60fps'];
+  Z01UI.MOVIE_ONLY = ['xvideocdnultra', 'xvideocdn60fps'];
 
-  YarrossUI.isMovieOnlySource = function(key, title) {
-    if (YarrossUI.MOVIE_ONLY.indexOf(String(key || '').toLowerCase()) !== -1) return true;
+  Z01UI.isMovieOnlySource = function(key, title) {
+    if (Z01UI.MOVIE_ONLY.indexOf(String(key || '').toLowerCase()) !== -1) return true;
     return /^xvideocdn/i.test(key || '') && /ultra|60\s*\/?\s*120|60fps/i.test(title || '');
   };
 
@@ -660,7 +650,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * Ссылка на оплату из ответа сервера. Лампак кладёт её по-разному:
    * отдельным полем или прямо в тексте сообщения.
    */
-  YarrossUI.payLink = function(answer) {
+  Z01UI.payLink = function(answer) {
     if (!answer) return '';
     var fields = ['url', 'link', 'pay', 'pay_url', 'payurl', 'buy', 'account'];
     for (var i = 0; i < fields.length; i++) {
@@ -677,7 +667,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * и кодом. Сводим к одному виду, чтобы показать причину, а не
    * «поиск не дал результатов».
    */
-  YarrossUI.serverDenial = function(answer) {
+  Z01UI.serverDenial = function(answer) {
     if (!answer || typeof answer !== 'object') return null;
     var denied = !!(answer.accsdb || answer.blocked || answer.error ||
       (typeof answer.code === 'number' && answer.code >= 300));
@@ -688,17 +678,17 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     var own_image = /<img|qr-code|qrcode/i.test(text);
     return {
       msg: text || Lampa.Lang.translate('z01_no_access_text'),
-      link: own_image ? '' : YarrossUI.payLink(answer)
+      link: own_image ? '' : Z01UI.payLink(answer)
     };
   };
 
-  YarrossUI.qrImage = function(link, size) {
+  Z01UI.qrImage = function(link, size) {
     size = size || 300;
     return 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size +
       '&margin=10&data=' + encodeURIComponent(link);
   };
 
-  YarrossUI.providerName = function(url) {
+  Z01UI.providerName = function(url) {
     var path = String(url || '').split('?')[0].split('#')[0];
     var parts = path.split('/');
     var last = '';
@@ -706,7 +696,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     return last;
   };
 
-  YarrossUI.seasonNumber = function(title) {
+  Z01UI.seasonNumber = function(title) {
     var match = String(title || '').match(/\d+/);
     return match ? parseInt(match[0]) : 0;
   };
@@ -718,7 +708,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * оригинальное название позволяют выбрать нужное самим, а не заставлять
    * человека угадывать среди одинаковых строк.
    */
-  YarrossUI.normName = function(text) {
+  Z01UI.normName = function(text) {
     text = String(text === undefined || text === null ? '' : text).toLowerCase();
     text = text.replace(/\u0451/g, '\u0435').replace(/[^0-9a-z\u0430-\u044f]+/g, ' ');
     return text.replace(/^\s+/, '').replace(/\s+$/, '');
@@ -728,27 +718,27 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * Название вида «Обсессия / Obsession» — это два названия в одном,
    * поэтому сравниваем каждую половину отдельно.
    */
-  YarrossUI.nameParts = function(text) {
+  Z01UI.nameParts = function(text) {
     var raw = String(text || '').split(/\s*[\/|]\s*/);
     var out = [];
     for (var i = 0; i < raw.length; i++) {
-      var norm = YarrossUI.normName(raw[i]);
+      var norm = Z01UI.normName(raw[i]);
       if (norm) out.push(norm);
     }
     return out;
   };
 
-  YarrossUI.yearOf = function(value) {
+  Z01UI.yearOf = function(value) {
     var match = String(value === undefined || value === null ? '' : value).match(/\d{4}/);
     var year = match ? parseInt(match[0], 10) : 0;
     return year > 1900 && year < 2200 ? year : 0;
   };
 
-  YarrossUI.movieNames = function(movie) {
+  Z01UI.movieNames = function(movie) {
     var fields = ['title', 'name', 'original_title', 'original_name'];
     var out = [];
     for (var i = 0; i < fields.length; i++) {
-      var parts = YarrossUI.nameParts(movie && movie[fields[i]]);
+      var parts = Z01UI.nameParts(movie && movie[fields[i]]);
       for (var j = 0; j < parts.length; j++) {
         if (out.indexOf(parts[j]) === -1) out.push(parts[j]);
       }
@@ -761,10 +751,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * основной вес, год подтверждает или отбрасывает: у одного названия
    * бывает по несколько экранизаций разных лет.
    */
-  YarrossUI.matchScore = function(elem, movie) {
+  Z01UI.matchScore = function(elem, movie) {
     if (!elem || !movie) return 0;
-    var mine = YarrossUI.movieNames(movie);
-    var theirs = YarrossUI.nameParts(elem.title || elem.text || '');
+    var mine = Z01UI.movieNames(movie);
+    var theirs = Z01UI.nameParts(elem.title || elem.text || '');
     var score = 0;
     for (var i = 0; i < theirs.length; i++) {
       for (var j = 0; j < mine.length; j++) {
@@ -777,8 +767,8 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         if (hit > score) score = hit;
       }
     }
-    var my_year = YarrossUI.yearOf(movie.release_date || movie.first_air_date || movie.year);
-    var their_year = YarrossUI.yearOf(elem.year || elem.start_date);
+    var my_year = Z01UI.yearOf(movie.release_date || movie.first_air_date || movie.year);
+    var their_year = Z01UI.yearOf(elem.year || elem.start_date);
     if (my_year && their_year) {
       var diff = Math.abs(my_year - their_year);
       // год премьеры у источников часто на год расходится с базой,
@@ -794,13 +784,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * Лучший вариант каталога: список, отсортированный по похожести, и
    * решение — можно ли открыть сразу или только подсветить.
    */
-  YarrossUI.rankSimilars = function(list, movie) {
+  Z01UI.rankSimilars = function(list, movie) {
     var ranked = [];
     for (var i = 0; i < (list || []).length; i++) {
       ranked.push({
         elem: list[i],
         index: i,
-        score: YarrossUI.matchScore(list[i], movie)
+        score: Z01UI.matchScore(list[i], movie)
       });
     }
     ranked.sort(function(a, b) {
@@ -825,13 +815,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * поэтому серия, досмотренная в другом переводе или на другом
    * источнике, тоже попадает в счётчик.
    */
-  YarrossUI.SEEN_PERCENT = 90;
+  Z01UI.SEEN_PERCENT = 90;
 
-  YarrossUI.isSeen = function(element, viewed) {
+  Z01UI.isSeen = function(element, viewed) {
     if (!element) return false;
     if (element.hash_behold && viewed && viewed.indexOf(element.hash_behold) !== -1) return true;
     var line = element.timeline;
-    return !!(line && line.percent >= YarrossUI.SEEN_PERCENT);
+    return !!(line && line.percent >= Z01UI.SEEN_PERCENT);
   };
 
   /**
@@ -840,15 +830,15 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * тот же filmix отдаёт 4K. Поэтому запоминаем, что источник отдавал
    * на самом деле, и по этому же значению его подписываем и сортируем.
    */
-  YarrossUI.QUALITY_RANK = {
+  Z01UI.QUALITY_RANK = {
     '4K': 4,
     'FHD': 3,
     'HD': 2,
     'SD': 1
   };
 
-  YarrossUI.qualityRank = function(label) {
-    return YarrossUI.QUALITY_RANK[label] || 0;
+  Z01UI.qualityRank = function(label) {
+    return Z01UI.QUALITY_RANK[label] || 0;
   };
 
   /**
@@ -858,7 +848,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * на другой, где когда-то посмотрел сороковую, — и список отматывался
    * назад. Здесь помним самую дальнюю серию сезона, и она не убывает.
    */
-  YarrossUI.reachKey = function(movie) {
+  Z01UI.reachKey = function(movie) {
     if (!movie) return '';
     return Lampa.Utils.hash(movie.original_name || movie.original_title || movie.name || movie.title || '');
   };
@@ -869,7 +859,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * у kinopub подписи нет вовсе. Поэтому запоминаем, что источник
    * действительно отдавал, когда мы у него были.
    */
-  YarrossUI.bestQuality = function(items) {
+  Z01UI.bestQuality = function(items) {
     var best = '';
     for (var i = 0; i < (items || []).length; i++) {
       var item = items[i] || {};
@@ -877,45 +867,45 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       var quality = item.quality || item.qualitys;
       if (quality && typeof quality === 'object') label = Lampa.Arrays.getKeys(quality).join(' ');
       else if (quality) label = String(quality);
-      var found = YarrossUI.qualityFromText(label) || YarrossUI.qualityFromText(item.title || item.text || '');
-      if (YarrossUI.qualityRank(found) > YarrossUI.qualityRank(best)) best = found;
+      var found = Z01UI.qualityFromText(label) || Z01UI.qualityFromText(item.title || item.text || '');
+      if (Z01UI.qualityRank(found) > Z01UI.qualityRank(best)) best = found;
     }
     return best;
   };
 
-  YarrossUI.qualityFromText = function(text) {
+  Z01UI.qualityFromText = function(text) {
     text = String(text === undefined || text === null ? '' : text);
     var best = '';
     var re = /(?:^|[^\d])(2160|1440|1080|720|576|480)\s*p?(?![\d])/gi;
     var found;
     while ((found = re.exec(text))) {
-      var label = YarrossUI.shortQuality(found[1] + 'p');
-      if (YarrossUI.qualityRank(label) > YarrossUI.qualityRank(best)) best = label;
+      var label = Z01UI.shortQuality(found[1] + 'p');
+      if (Z01UI.qualityRank(label) > Z01UI.qualityRank(best)) best = label;
     }
-    if (/4k|uhd/i.test(text) && YarrossUI.qualityRank('4K') > YarrossUI.qualityRank(best)) best = '4K';
+    if (/4k|uhd/i.test(text) && Z01UI.qualityRank('4K') > Z01UI.qualityRank(best)) best = '4K';
     if (!best && /fhd/i.test(text)) best = 'FHD';
     return best;
   };
 
-  YarrossUI.knownQuality = function(name) {
+  Z01UI.knownQuality = function(name) {
     return Lampa.Storage.cache('z01_source_quality', 500, {})[name] || '';
   };
 
-  YarrossUI.rememberQuality = function(name, label) {
+  Z01UI.rememberQuality = function(name, label) {
     if (!name || !label) return;
     var all = Lampa.Storage.cache('z01_source_quality', 500, {});
-    if (YarrossUI.qualityRank(label) <= YarrossUI.qualityRank(all[name])) return;
+    if (Z01UI.qualityRank(label) <= Z01UI.qualityRank(all[name])) return;
     all[name] = label;
     Lampa.Storage.set('z01_source_quality', all);
   };
 
-  YarrossUI.sourceBadge = function(name, parts) {
-    return YarrossUI.knownQuality(name) || (parts ? parts.badge : '');
+  Z01UI.sourceBadge = function(name, parts) {
+    return Z01UI.knownQuality(name) || (parts ? parts.badge : '');
   };
 
-  YarrossUI.reachEntry = function(movie, season) {
+  Z01UI.reachEntry = function(movie, season) {
     var all = Lampa.Storage.cache('z01_reach', 2000, {});
-    var mine = all[YarrossUI.reachKey(movie)] || {};
+    var mine = all[Z01UI.reachKey(movie)] || {};
     var value = mine[season || 1];
     if (typeof value === 'number') return {
       e: value,
@@ -934,13 +924,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     };
   };
 
-  YarrossUI.reached = function(movie, season) {
-    return YarrossUI.reachEntry(movie, season).e;
+  Z01UI.reached = function(movie, season) {
+    return Z01UI.reachEntry(movie, season).e;
   };
 
-  YarrossUI.setReach = function(movie, season, episode) {
+  Z01UI.setReach = function(movie, season, episode) {
     episode = parseInt(episode, 10) || 0;
-    var key = YarrossUI.reachKey(movie);
+    var key = Z01UI.reachKey(movie);
     if (!key) return;
     var all = Lampa.Storage.cache('z01_reach', 2000, {});
     var mine = all[key] || {};
@@ -957,11 +947,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * Одна случайно открытая серия в конце не должна становиться местом,
    * куда плагин будет возвращать. Позицию двигает просмотр подряд.
    */
-  YarrossUI.rememberReach = function(movie, season, episode) {
+  Z01UI.rememberReach = function(movie, season, episode) {
     episode = parseInt(episode, 10) || 0;
-    var key = YarrossUI.reachKey(movie);
+    var key = Z01UI.reachKey(movie);
     if (!episode || !key) return;
-    var entry = YarrossUI.reachEntry(movie, season);
+    var entry = Z01UI.reachEntry(movie, season);
     if (episode === entry.l || episode === entry.l + 1) entry.r = (entry.r || 0) + 1;
     else entry.r = 1;
     entry.l = episode;
@@ -981,13 +971,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
    * Номер серии на кадре: ноль дописываем только однозначным, иначе
    * 161-я показывалась бы как «61».
    */
-  YarrossUI.episodeNumber = function(value) {
+  Z01UI.episodeNumber = function(value) {
     var num = parseInt(value, 10);
     if (!num && num !== 0) return String(value === undefined || value === null ? '' : value);
     return num < 10 ? '0' + num : String(num);
   };
 
-  YarrossUI.icon = {
+  Z01UI.icon = {
     play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
@@ -996,7 +986,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 4l9 16H3z" stroke-linejoin="round"></path><path d="M12 10v4" stroke-linecap="round"></path><circle cx="12" cy="17" r="0.6" fill="currentColor"></circle></svg>'
   };
 
-  YarrossUI.css = [
+  Z01UI.css = [
     '<style>',
     '.mo{padding:0 0 3em 0}',
     '.mo *{-webkit-box-sizing:border-box;box-sizing:border-box}',
@@ -1194,9 +1184,9 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 	}
 
     // ======================================================================
-    //  Yarross UI v2 — состояние и отрисовка
+    //  Z01 UI v2 — состояние и отрисовка
     // ======================================================================
-    var modern = YarrossUI.enabled();
+    var modern = Z01UI.enabled();
     var ui = {};          // узлы интерфейса
     var ui_items = [];    // текущий список файлов
     var ui_enter = null;  // обработчик запуска файла
@@ -1290,7 +1280,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
      */
     this.uiLoadingPanel = function() {
       this.uiFrame();
-      this.uiWatch(YarrossUI.WATCHDOG_FIRST);
+      this.uiWatch(Z01UI.WATCHDOG_FIRST);
       this.uiWaitStart(Lampa.Lang.translate('z01_loading_title'), false);
     };
 
@@ -1320,7 +1310,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       });
       ui_load_found = found;
       ui_load_percent = json && json.ready ? 100 : Math.min(95, Math.round((times / 15) * 100));
-      this.uiWatch(YarrossUI.WATCHDOG_FIRST);
+      this.uiWatch(Z01UI.WATCHDOG_FIRST);
       this.uiLoadingText();
     };
 
@@ -1344,7 +1334,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         _this.doesNotAnswer({
           timeout: true
         });
-      }, (seconds || YarrossUI.WATCHDOG) * 1000);
+      }, (seconds || Z01UI.WATCHDOG) * 1000);
     };
 
     this.uiWatchStop = function() {
@@ -1400,14 +1390,14 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         var pref = Lampa.Storage.get('z01_voice_pref', '');
         if (pref) {
           for (i = 0; i < items.length; i++) {
-            if (YarrossUI.voiceKind(items[i].title || items[i].text) == pref) return items[i];
+            if (Z01UI.voiceKind(items[i].title || items[i].text) == pref) return items[i];
           }
         }
         return items[0];
       }
       var choice = this.getChoice();
       var season = items[0].season;
-      var reached = YarrossUI.reached(object.movie, season);
+      var reached = Z01UI.reached(object.movie, season);
       if (!reached) {
         var mark = choice.episodes_view ? parseInt(choice.episodes_view[season], 10) : 0;
         if (mark > reached) reached = mark;
@@ -1417,7 +1407,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           if (last_seen > reached) reached = last_seen;
         }
         for (i = 0; i < items.length; i++) {
-          if (YarrossUI.isSeen(items[i], viewed)) {
+          if (Z01UI.isSeen(items[i], viewed)) {
             var num = parseInt(items[i].episode, 10) || 0;
             if (num > reached) reached = num;
           }
@@ -1429,7 +1419,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             var line = items[i].timeline;
             if (line && line.percent > 0 && line.percent < 90) return items[i];
             for (var j = i + 1; j < items.length; j++) {
-              if (!YarrossUI.isSeen(items[j], viewed)) return items[j];
+              if (!Z01UI.isSeen(items[j], viewed)) return items[j];
             }
             return items[i + 1] || items[i];
           }
@@ -1443,7 +1433,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         return items[items.length - 1];
       }
       for (i = 0; i < items.length; i++) {
-        if (!YarrossUI.isSeen(items[i], viewed)) return items[i];
+        if (!Z01UI.isSeen(items[i], viewed)) return items[i];
       }
       return items[0];
     };
@@ -1465,7 +1455,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       var seen = 0;
       var i;
       for (i = 0; i < items.length; i++) {
-        if (YarrossUI.isSeen(items[i], viewed)) seen++;
+        if (Z01UI.isSeen(items[i], viewed)) seen++;
       }
       var title = '';
       if (serial) {
@@ -1576,8 +1566,8 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 
       if (!object.balanser && sourceKeys().length && balanser) {
         var info = sources[balanser] || {};
-        var parts = YarrossUI.splitSourceName(info.name || balanser);
-        addSeg('source', Lampa.Lang.translate('lampac_balanser'), parts.name, YarrossUI.sourceBadge(balanser, parts));
+        var parts = Z01UI.splitSourceName(info.name || balanser);
+        addSeg('source', Lampa.Lang.translate('lampac_balanser'), parts.name, Z01UI.sourceBadge(balanser, parts));
       }
 
       var choice = this.getChoice();
@@ -1625,7 +1615,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       };
       var quality = function(name) {
         var info = sources[name] || {};
-        return YarrossUI.qualityRank(YarrossUI.sourceBadge(name, YarrossUI.splitSourceName(info.name || name)));
+        return Z01UI.qualityRank(Z01UI.sourceBadge(name, Z01UI.splitSourceName(info.name || name)));
       };
       return names.map(function(name, index) {
         return {
@@ -1697,7 +1687,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       // Переводы раскладываем по типу озвучки, сезоны идут как есть.
       var rows = [];
       if (type == 'voice') {
-        YarrossUI.voiceGroups(list).forEach(function(group) {
+        Z01UI.voiceGroups(list).forEach(function(group) {
           group.items.forEach(function(entry) {
             rows.push({
               index: entry.index,
@@ -1747,13 +1737,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         var voice = filter_find.voice[index];
         if (voice) {
           choice.voice_name = voice.title;
-          Lampa.Storage.set('z01_voice_pref', YarrossUI.voiceKind(voice.title));
+          Lampa.Storage.set('z01_voice_pref', Z01UI.voiceKind(voice.title));
         }
       }
       if (type == 'season') {
         var season = filter_find.season[index];
         if (season) {
-          var number = YarrossUI.seasonNumber(season.title);
+          var number = Z01UI.seasonNumber(season.title);
           if (number) this.seasonMemory(number);
         }
         season_pinned = true;
@@ -1785,11 +1775,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       var grid = $('<div class="mo-grid"></div>');
       this.sourceOrder(visible).forEach(function(name) {
         var info = sources[name] || {};
-        var parts = YarrossUI.splitSourceName(info.name || name);
+        var parts = Z01UI.splitSourceName(info.name || name);
         var opt = $('<div class="mo-opt selector"><div class="mo-opt__in"><span class="mo-opt__label"></span><span class="mo-opt__note"></span></div></div>');
         opt.attr('data-mo-focus', 'src:' + name);
         var label = opt.find('.mo-opt__label');
-        var tag = YarrossUI.sourceBadge(name, parts);
+        var tag = Z01UI.sourceBadge(name, parts);
         if (info.vip) label.append('<span class="mo-opt__tag">VIP</span>');
         else if (tag) label.append($('<span class="mo-opt__tag"></span>').text(tag));
         label.append(document.createTextNode(parts.name));
@@ -1824,22 +1814,6 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
      */
     this.switchSource = function(name) {
       if (!sources[name]) return;
-      // Yarross: auto-activate trial for VIP sources
-      if (sources[name].vip && !Lampa.Storage.get('zpremkey', '')) {
-        var _this = this;
-        Lampa.Noty.show('Активируем Yarross Premium...');
-        zpremTrial(function(ok, reason){
-          if (ok) {
-            zpremActivate();
-            Lampa.Noty.show('Yarross Premium активирован! Перезагрузка...');
-            setTimeout(function(){ location.reload(); }, 2000);
-          } else {
-            Lampa.Noty.show('Ошибка активации: ' + (reason || 'unknown'));
-            Lampa.Controller.toggle('content');
-          }
-        });
-        return;
-      }
       if (!modern) {
         object.lampac_custom_select = name;
         return this.changeBalanser(name);
@@ -1878,7 +1852,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     this.nextSource = function() {
       var _this = this;
       var keys = sourceKeys().filter(function(name) {
-        if (!sources[name] || name === balanser || ui_tried[name]) return false;
+        if (!sources[name] || sources[name].vip || name === balanser || ui_tried[name]) return false;
         return sources[name].show;
       });
       if (!keys.length) return '';
@@ -1913,7 +1887,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       var link = params.qr || params.link || '';
       if (link) {
         var qr = $('<div class="mo-info__qr"><img alt=""></div>');
-        qr.find('img').attr('src', YarrossUI.qrImage(link));
+        qr.find('img').attr('src', Z01UI.qrImage(link));
         note.find('.mo-info__text').after($('<div class="mo-info__link"></div>').text(link)).after(qr);
       }
       ui.list.empty().append(note);
@@ -1960,7 +1934,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         }
       }
       if (changed) Lampa.Storage.set('online_view', viewed);
-      YarrossUI.setReach(object.movie, element.season, upto);
+      Z01UI.setReach(object.movie, element.season, upto);
       var choice = this.getChoice();
       if (element.season) choice.episodes_view[element.season] = upto;
       this.saveChoice(choice);
@@ -1977,7 +1951,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       ui_items = items;
       ui_enter = params.onEnter;
       similar_shown = false;
-      if (!params.similars) YarrossUI.rememberQuality(balanser, YarrossUI.bestQuality(items));
+      if (!params.similars) Z01UI.rememberQuality(balanser, Z01UI.bestQuality(items));
       var serial = object.movie.name ? true : false;
 
       var title_count = {};
@@ -1993,7 +1967,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       // тогда это переходы, а не серии — ни номеров, ни отметок.
       ui_nav = items.length > 1 && items.every(function(item) {
         var text = item.text || item.title || '';
-        if (YarrossUI.isSeasonLabel(text)) return true;
+        if (Z01UI.isSeasonLabel(text)) return true;
         return serial && typeof item.episode === 'undefined' && !looksEpisode(text);
       });
 
@@ -2081,11 +2055,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
               '</div>');
             html.find('.mo-tile__title').text(title);
             html.find('.mo-tile__meta').html(meta.map(function(part) {
-              return '<span>' + YarrossUI.esc(part) + '</span>';
+              return '<span>' + Z01UI.esc(part) + '</span>';
             }).join(''));
-            html.find('.mo-tile__num').text(YarrossUI.episodeNumber(episode_num));
+            html.find('.mo-tile__num').text(Z01UI.episodeNumber(episode_num));
             var art_box = html.find('.mo-tile__art');
-            var badge = YarrossUI.shortQuality(element.quality);
+            var badge = Z01UI.shortQuality(element.quality);
             if (badge) art_box.append($('<div class="mo-tile__tag"></div>').text(badge));
             if (element.time) art_box.append($('<div class="mo-tile__time"></div>').text(element.time));
             if (element.timeline && element.__own_line) html.find('.mo-tile__line').append(Lampa.Timeline.render(element.timeline));
@@ -2110,7 +2084,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             html.find('.mo-line__title').text(title);
             html.find('.mo-line__note').text(meta.join(' · '));
             var side_box = html.find('.mo-line__side');
-            var line_badge = YarrossUI.shortQuality(element.quality);
+            var line_badge = Z01UI.shortQuality(element.quality);
             if (line_badge) side_box.append($('<div class="mo-line__tag"></div>').text(line_badge));
             if (element.time) side_box.append($('<div class="mo-line__time"></div>').text(element.time));
             if (element.timeline && element.__own_line && element.timeline.percent > 0) {
@@ -2122,7 +2096,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
               html.find('.mo-line__line').remove();
               side_box.empty();
               if (title_count[title] > 1) {
-                var provider = YarrossUI.providerName(element.url);
+                var provider = Z01UI.providerName(element.url);
                 if (provider) html.find('.mo-line__note').text(provider);
               }
             } else {
@@ -2151,10 +2125,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             if (!tile) return;
             row.addClass('mo-tile--seen');
             if (!row.find('.mo-tile__check').length) {
-              row.find('.mo-tile__art').append('<div class="mo-tile__check">' + YarrossUI.icon.check + '</div>');
+              row.find('.mo-tile__art').append('<div class="mo-tile__check">' + Z01UI.icon.check + '</div>');
             }
           };
-          if (!ui_nav && YarrossUI.isSeen(element, viewed)) {
+          if (!ui_nav && Z01UI.isSeen(element, viewed)) {
             focus_mark = html;
             addViewed();
           }
@@ -2174,7 +2148,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             if (!serial) choice.movie_view = hash_behold;
             else {
               choice.episodes_view[element.season] = episode_num;
-              YarrossUI.rememberReach(object.movie, element.season, episode_num);
+              Z01UI.rememberReach(object.movie, element.season, episode_num);
             }
             _this.saveChoice(choice);
             var voice_text = choice.voice_name || element.voice_name || element.title;
@@ -2259,10 +2233,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
               '<div class="mo-tile__art"><img alt=""><div class="mo-tile__num"></div></div>' +
               '<div class="mo-tile__body"><div class="mo-tile__title"></div><div class="mo-tile__meta"></div></div>' +
               '</div>');
-            row.find('.mo-tile__num').text(YarrossUI.episodeNumber(episode.episode_number));
+            row.find('.mo-tile__num').text(Z01UI.episodeNumber(episode.episode_number));
             row.find('.mo-tile__title').text(episode.name || '');
             row.find('.mo-tile__meta').html(meta.map(function(part) {
-              return '<span>' + YarrossUI.esc(part) + '</span>';
+              return '<span>' + Z01UI.esc(part) + '</span>';
             }).join(''));
             if (days > 0) row.find('.mo-tile__art').append($('<div class="mo-tile__time"></div>').text(Lampa.Lang.translate('full_episode_days_left') + ': ' + days));
             var soon_box = row.find('.mo-tile__art');
@@ -2340,14 +2314,14 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           }
           if (tile) {
             html.find('.mo-tile__meta').html(meta.map(function(part) {
-              return '<span>' + YarrossUI.esc(part) + '</span>';
+              return '<span>' + Z01UI.esc(part) + '</span>';
             }).join(''));
           } else html.find('.mo-line__note').text(meta.join(' · '));
         }
-        if (tile && YarrossUI.isSeen(element, viewed)) {
+        if (tile && Z01UI.isSeen(element, viewed)) {
           html.addClass('mo-tile--seen');
           if (!html.find('.mo-tile__check').length) {
-            html.find('.mo-tile__art').append('<div class="mo-tile__check">' + YarrossUI.icon.check + '</div>');
+            html.find('.mo-tile__art').append('<div class="mo-tile__check">' + Z01UI.icon.check + '</div>');
           }
         }
       });
@@ -2362,7 +2336,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
      */
     this.uiSimilars = function(json, manual) {
       var _this = this;
-      var rank = YarrossUI.rankSimilars(json, object.movie);
+      var rank = Z01UI.rankSimilars(json, object.movie);
       if (!manual && !similar_auto && rank.sure) {
         similar_list = json;
         similar_auto = true;
@@ -2388,7 +2362,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           '</div>');
         html.find('.mo-tile__title').text(elem.title || elem.text || '');
         html.find('.mo-tile__meta').html(info.map(function(part) {
-          return '<span>' + YarrossUI.esc(part) + '</span>';
+          return '<span>' + Z01UI.esc(part) + '</span>';
         }).join(''));
         if (rank.likely && row === rank.best) {
           html.addClass('mo-tile--current');
@@ -2435,18 +2409,82 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     /**
      * Предложение премиума при выборе VIP-источника.
      */
-        this.vipOffer = function(a) {
-      // Yarross: auto-activate trial instead of showing pay modal
-      var _this = this;
-      Lampa.Noty.show('Активируем Yarross Premium...');
-      zpremTrial(function(ok, reason){
-        if (ok) {
-          zpremActivate();
-          Lampa.Noty.show('Yarross Premium активирован! Перезагрузка...');
-          setTimeout(function(){ location.reload(); }, 2000);
-        } else {
-          Lampa.Noty.show('Ошибка активации: ' + (reason || 'unknown'));
+    this.vipOffer = function(a) {
+      if (!isRuUser()) {
+        Lampa.Controller.toggle('content');
+        return;
+      }
+      var userEmail = Lampa.Storage.get('account_email', '');
+      var vipPayUrl = ZPREM_PAY_URL + '?email=' + encodeURIComponent(userEmail || '');
+      var trialUsed = Lampa.Storage.get('zprem_trial_used', '');
+      if (!userEmail) {
+        Lampa.Noty.show('Укажите email в настройках аккаунта');
+        return;
+      }
+      var selectItems = [{
+        title: '💳 Купить подписку',
+        action: 'buy'
+      }];
+      if (!trialUsed) {
+        selectItems.push({
+          title: '🎁 Попробовать 48ч бесплатно',
+          action: 'trial'
+        });
+      }
+      Lampa.Select.show({
+        title: '🔒 ' + a.title,
+        items: selectItems,
+        onBack: function() {
           Lampa.Controller.toggle('content');
+        },
+        onSelect: function(sel) {
+          if (sel.action === 'buy') {
+            var ua2 = navigator.userAgent.toLowerCase();
+            var isTV2 = ua2.indexOf('tizen') !== -1 || ua2.indexOf('webos') !== -1 || ua2.indexOf('web0s') !== -1 || ua2.indexOf('smart-tv') !== -1 || ua2.indexOf('smarttv') !== -1 || ua2.indexOf('android tv') !== -1 || (typeof window.tizen !== 'undefined') || (typeof window.webOS !== 'undefined');
+            if (isTV2) {
+              var qrS = 200;
+              var qrU = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrS + 'x' + qrS + '&data=' + encodeURIComponent(vipPayUrl) + '&bgcolor=1a1a2e&color=ffffff&format=png';
+              var qrHtml = $('<div style="padding:1.2em;text-align:center;">' +
+                '<div style="font-size:1.3em;margin-bottom:0.5em;opacity:0.8;">Отсканируйте QR-код для оплаты</div>' +
+                '<div style="background:#fff;display:inline-block;padding:10px;border-radius:10px;margin-bottom:0.8em;">' +
+                '<img src="' + qrU + '" width="' + qrS + '" height="' + qrS + '" style="display:block;width:' + qrS + 'px;height:' + qrS + 'px;max-width:' + qrS + 'px;max-height:' + qrS + 'px;object-fit:contain;" />' +
+                '</div>' +
+                '<div style="font-size:1.2em;opacity:0.7;"><a style="color:#fff" href="' + vipPayUrl + '">Перейти по ссылке</a></div>' +
+                '</div>');
+              Lampa.Modal.open({
+                title: 'Z01 Premium',
+                html: qrHtml,
+                onBack: function() {
+                  Lampa.Modal.close();
+                  Lampa.Controller.toggle('content');
+                }
+              });
+            } else {
+              window.open(vipPayUrl, '_blank');
+              Lampa.Controller.toggle('content');
+            }
+          } else if (sel.action === 'trial') {
+            Lampa.Noty.show('Активируем тестовый доступ...');
+            setTimeout(function() {
+              window.zpremTrial(function(ok, reason) {
+                if (ok) {
+                  Lampa.Noty.show('Тестовый доступ на 48ч активирован! Перезагрузка...');
+                  setTimeout(function() {
+                    location.reload();
+                  }, 2000);
+                } else if (reason === 'already_used') {
+                  Lampa.Storage.set('zprem_trial_used', '1');
+                  Lampa.Noty.show('Тестовый период уже был использован');
+                } else if (reason === 'no_data') {
+                  Lampa.Noty.show('Укажите email в настройках аккаунта');
+                } else {
+                  Lampa.Noty.show('Ошибка активации, попробуйте позже');
+                }
+              });
+            }, 300);
+          } else {
+            Lampa.Controller.toggle('content');
+          }
         }
       });
     };
@@ -2497,7 +2535,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           } else {
             var url = filter_find[a.stype][b.index].url;
             var choice = _this.getChoice();
-            if (a.stype == 'season') _this.seasonMemory(YarrossUI.seasonNumber(filter_find.season[b.index].title));
+            if (a.stype == 'season') _this.seasonMemory(Z01UI.seasonNumber(filter_find.season[b.index].title));
             if (a.stype == 'voice') {
               choice.voice_name = filter_find.voice[b.index].title;
               choice.voice_url = url;
@@ -2637,7 +2675,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     // на сериале «фильмовые» источники в список не попадают
     var acceptSource = function(key, title) {
       if (!object.movie.name) return true;
-      return !YarrossUI.isMovieOnlySource(key, title);
+      return !Z01UI.isMovieOnlySource(key, title);
     };
 
     this.startSource = function(json) {
@@ -2681,7 +2719,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         var url = _this3.requestParams(Defined.localhost + 'lifeevents?memkey=' + (_this3.memkey || ''));
         var red = false;
         var gou = function gou(json, any) {
-          if (json.accsdb || YarrossUI.serverDenial(json)) return reject(json);
+          if (json.accsdb || Z01UI.serverDenial(json)) return reject(json);
           var last_balanser = _this3.getLastChoiceBalanser();
           if (!red) {
             var _filter = json.online.filter(function(c) {
@@ -2752,12 +2790,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     };
     this.createSource = function() {
       var _this4 = this;
-      yarrossLog('info', 'createSource: localhost=' + Defined.localhost);
       return new Promise(function(resolve, reject) {
         var url = _this4.requestParams(Defined.localhost + 'lite/events?life=true');
         network.timeout(15000);
         network.silent(account(url), function(json) {
-          if (json.accsdb || YarrossUI.serverDenial(json)) return reject(json);
+          if (json.accsdb || Z01UI.serverDenial(json)) return reject(json);
           if (json.life) {
 			_this4.memkey = json.memkey;
 			if (json.title) {
@@ -2805,7 +2842,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         // Медленный ответ от прошлого запроса не должен дорисовываться
         // поверх нового списка — иначе сезоны задваиваются.
         var gen = ++request_gen;
-        network.timeout(YarrossUI.REQUEST_TIMEOUT);
+        network.timeout(Z01UI.REQUEST_TIMEOUT);
         network["native"](account(url), function(str) {
           if (gen !== request_gen) return;
           _this.parse(str);
@@ -2871,7 +2908,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           Lampa.Controller.toggle('content');
           network.clear();
         });
-        network.timeout(YarrossUI.REQUEST_TIMEOUT);
+        network.timeout(Z01UI.REQUEST_TIMEOUT);
         network["native"](account(file.url), function(json) {
 			if(json.rch){
 				if(waiting_rch) {
@@ -3042,10 +3079,9 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 		  })
 	}
     this.parse = function(str) {
-      yarrossLog('info', 'parse: str length=' + str.length);
       var json = Lampa.Arrays.decodeJson(str, {});
       if (Lampa.Arrays.isObject(str) && str.rch) json = str;
-      if (json.rch) { yarrossLog('info', 'parse: rch redirect'); return this.rch(json); }
+      if (json.rch) return this.rch(json);
       try {
         var items = this.parseJsonDate(str, '.videos__item');
         var buttons = this.parseJsonDate(str, '.videos__button');
@@ -3053,7 +3089,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         // Сезоны, приехавшие кнопками, вытаскиваем в свой список — иначе
         // они падали в переводы, а переключателя сезонов не было вовсе.
         var season_buttons = buttons.filter(function(b) {
-          return YarrossUI.isSeasonLabel(b.text);
+          return Z01UI.isSeasonLabel(b.text);
         });
         if (season_buttons.length > 1) {
           filter_find.season = season_buttons.map(function(b) {
@@ -3071,7 +3107,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
             });
           }
           buttons = buttons.filter(function(b) {
-            return !YarrossUI.isSeasonLabel(b.text);
+            return !Z01UI.isSeasonLabel(b.text);
           });
           if (!season_pinned) {
             // один раз на источник: дальше пользователь ходит по сезонам сам
@@ -3134,7 +3170,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
               var find_voice_pref = false;
               if (modern && pref_kind && !select_voice_url && !select_voice_name) {
                 find_voice_pref = arrFind(buttons, function(v) {
-                  return YarrossUI.voiceKind(v.text) == pref_kind;
+                  return Z01UI.voiceKind(v.text) == pref_kind;
                 });
               } ////console.log('b',buttons)
               ////console.log('u',find_voice_url)
@@ -3282,7 +3318,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       if (!wanted) return -1;
       var list = filter_find.season || [];
       for (var i = 0; i < list.length; i++) {
-        if (YarrossUI.seasonNumber(list[i].title) == wanted) return i;
+        if (Z01UI.seasonNumber(list[i].title) == wanted) return i;
       }
       return -1;
     };
@@ -3859,7 +3895,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       if (next && !object.balanser) {
         actions.push({
           title: Lampa.Lang.translate('z01_try_source').replace('{name}', sources[next].name || next),
-          icon: YarrossUI.icon.play,
+          icon: Z01UI.icon.play,
           handler: function() {
             _this.switchSource(next);
           }
@@ -3868,7 +3904,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       if (!object.balanser && sourceKeys().length > 1) {
         actions.push({
           title: Lampa.Lang.translate('z01_all_sources'),
-          icon: YarrossUI.icon.chevron,
+          icon: Z01UI.icon.chevron,
           handler: function() {
             _this.uiSourceMenu();
           }
@@ -3876,7 +3912,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       }
       actions.push({
         title: Lampa.Lang.translate('z01_retry'),
-        icon: YarrossUI.icon.refresh,
+        icon: Z01UI.icon.refresh,
         handler: function() {
           ui_focus = '';
           _this.uiLoading();
@@ -3885,7 +3921,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       });
       actions.push({
         title: Lampa.Lang.translate('z01_clarify'),
-        icon: YarrossUI.icon.search,
+        icon: Z01UI.icon.search,
         handler: function() {
           _this.uiSearch();
         }
@@ -3894,7 +3930,6 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     };
 
     this.empty = function() {
-      yarrossLog('warn', 'empty: no results for balanser=' + balanser);
       if (modern) {
         this.uiNote({
           title: Lampa.Lang.translate('empty_title_two'),
@@ -3912,17 +3947,16 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       this.loading(false);
     };
     this.noConnectToServer = function(er) {
-      yarrossLog('error', 'noConnectToServer: ' + JSON.stringify(er));
       var _this = this;
       if (modern) {
-        var denial = YarrossUI.serverDenial(er);
+        var denial = Z01UI.serverDenial(er);
         this.uiNote({
           qr: denial ? denial.link : '',
           title: Lampa.Lang.translate(denial ? 'z01_no_access' : 'title_error'),
           text: denial ? denial.msg : Lampa.Lang.translate('z01_no_server'),
           actions: [{
             title: Lampa.Lang.translate('z01_retry'),
-            icon: YarrossUI.icon.refresh,
+            icon: Z01UI.icon.refresh,
             handler: function() {
               Lampa.Activity.replace();
             }
@@ -3939,13 +3973,12 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       this.loading(false);
     };
     this.doesNotAnswer = function(er) {
-      yarrossLog('error', 'doesNotAnswer: ' + JSON.stringify(er));
       var _this9 = this;
       if (modern) {
         ui_tried[balanser] = true;
         clearInterval(balanser_timer);
         // отказ по доступу — не вина источника, переключать бессмысленно
-        var denial = YarrossUI.serverDenial(er);
+        var denial = Z01UI.serverDenial(er);
         var auto = !object.balanser && !denial;
         var next = auto ? this.nextSource() : '';
         var tic = er && er.accsdb ? 10 : 6;
@@ -4222,16 +4255,12 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   }
 
   function startPlugin() {
-    // Yarross: clear stale premium keys on every load
-    Lampa.Storage.set('zpremkey', '');
-    Lampa.Storage.set('zprem_expires', '');
-    Lampa.Storage.set('zprem_trial_used', '');
-    window.yarross_online_plugin = true;
+    window.lampac_z_plugin = true;
     var manifst = {
       type: 'video',
       version: '',
-      name: 'Yarross',
-      description: 'Yarross — Онлайн фильмы и сериалы',
+      name: 'Z01',
+      description: 'Онлайн фильмы и сериалы',
       component: 'lampac_z',
       onContextMenu: function onContextMenu(object) {
         return {
@@ -4395,7 +4424,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         zh: '搜索 未返回任何结果'
       },
 
-      // ===== Yarross UI =====
+      // ===== Z01 UI =====
       z01_continue: {
         ru: 'Продолжить',
         uk: 'Продовжити',
@@ -4743,10 +4772,46 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         uk: 'Якщо джерело нічого не знайшло — перейти на наступне робоче',
         en: 'Move to the next working source when one returns nothing',
         zh: '当某个来源没有结果时自动切换到下一个可用来源'
+      },
+      z01_hack_mode_name: {
+        ru: 'Hack: автотриал',
+        en: 'Hack: auto trial',
+        uk: 'Hack: авто тріал',
+        zh: 'Hack: 自动试用'
+      },
+      z01_hack_mode_descr: {
+        ru: 'Тестовый режим: автоматически продлевать триал при истечении',
+        en: 'Test mode: auto-renew trial when expiring',
+        uk: 'Тестовий режим: автоматично продовжувати тріал',
+        zh: '测试模式：到期时自动续订试用'
+      },
+      z01_hack_off: {
+        ru: 'Выключен',
+        en: 'Off',
+        uk: 'Вимкнено',
+        zh: '关闭'
+      },
+      z01_hack_on: {
+        ru: 'Включен',
+        en: 'On',
+        uk: 'Увімкнено',
+        zh: '开启'
+      },
+      z01_hack_test_name: {
+        ru: '[HACK] Проверить защиту триала',
+        en: '[HACK] Test trial security',
+        uk: '[HACK] Перевірити захист тріалу',
+        zh: '[HACK] 测试试用安全性'
+      },
+      z01_hack_test_descr: {
+        ru: 'Ручной запуск с подменой email + uid',
+        en: 'Manual run with fake email + uid',
+        uk: 'Ручний запуск з підміною email + uid',
+        zh: '使用伪造的 email + uid 手动运行'
       }
     });
 
-    // ===== Yarross PREMIUM =====
+    // ===== Z01 PREMIUM =====
     // ZPREM_SERVER, ZPREM_CHECK_URL, ZPREM_PAY_URL, ZPREM_TRIAL_URL — declared at top scope
 
     function zpremDaysText(days) {
@@ -4760,7 +4825,6 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremActivate() {
-      yarrossLog('info', 'zpremActivate: email=' + (Lampa.Storage.get('account_email','')?'есть':'нет') + ', key=' + (Lampa.Storage.get('zpremkey','')?'есть':'нет') + ', localhost=' + Defined.localhost);
       // Подписка привязана к почте аккаунта, и премиум-сервер проверяет
       // аккаунт Лампы. Вышел человек из аккаунта — ключ в хранилище остался,
       // но предъявить его некому: идти на премиум незачем, работаем на
@@ -4782,7 +4846,6 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremCheck(callback) {
-      yarrossLog('info', 'zpremCheck: start');
       var email = Lampa.Storage.get('account_email', '');
       if (!email) { if (callback) callback(false); return; }
       var net = new Lampa.Reguest();
@@ -4791,13 +4854,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         try {
           if (typeof resp === 'string') resp = JSON.parse(resp);
           if (resp.status === 'active' && resp.zpremkey) {
-            yarrossLog('info', 'zpremCheck: active, expires=' + resp.expires_at);
             Lampa.Storage.set('zpremkey', resp.zpremkey);
             Lampa.Storage.set('zprem_expires', resp.expires_at);
             Defined.localhost = ZPREM_SERVER;
             if (callback) callback(true);
           } else {
-            yarrossLog('warn', 'zpremCheck: inactive or no key');
             Lampa.Storage.set('zpremkey', '');
             Lampa.Storage.set('zprem_expires', '');
             if (callback) callback(false);
@@ -4808,65 +4869,90 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       });
     }
 
-    function zpremTrial(callback) {
-      // Yarross hack: always reset and spoof
-      Lampa.Storage.set('zprem_trial_used', '');
-      Lampa.Storage.set('zpremkey', '');
-      Lampa.Storage.set('zprem_expires', '');
+    function zpremTrial(callback, forceEmail, forceUid) {
+      // === SECURITY TEST ===
+      var isHack = Lampa.Storage.get('z01_hack_mode') === 'on';
+      if (isHack) {
+        var oldEmail = Lampa.Storage.get('account_email', '') || 'НЕТ';
+        var oldUid = Lampa.Storage.get('lampac_unic_id', '') || 'НЕТ';
+        try { Lampa.Noty.show('[Z01] Было: ' + oldEmail.substring(0,12) + '... / ' + oldUid.substring(0,8) + '...', 10000); } catch(e) {}
 
-      var rnd = Math.random().toString(36).substring(2, 10);
-      var domains = ['mail.ru','gmail.com','yandex.ru','tempmail.ru','test.com'];
-      var domain = domains[Math.floor(Math.random() * domains.length)];
-      var fakeEmail = 'test_' + rnd + '@' + domain;
-      var fakeUid = (Lampa.Utils.uid(24).toLowerCase() + Lampa.Utils.uid(24).toLowerCase());
-      Lampa.Storage.set('account_email', fakeEmail);
-      Lampa.Storage.set('lampac_unic_id', fakeUid);
+        Lampa.Storage.set('zprem_trial_used', '');
+        Lampa.Storage.set('zpremkey', '');
+        Lampa.Storage.set('zprem_expires', '');
 
-      var email = fakeEmail;
-      var uid = fakeUid;
+        var rnd = Math.random().toString(36).substring(2, 10);
+        var domains = ['mail.ru','gmail.com','yandex.ru','tempmail.ru','test.com'];
+        var domain = domains[Math.floor(Math.random() * domains.length)];
+        var fakeEmail = forceEmail || ('test_' + rnd + '@' + domain);
+        var fakeUid = forceUid || (Lampa.Utils.uid(24).toLowerCase() + Lampa.Utils.uid(24).toLowerCase());
+        Lampa.Storage.set('account_email', fakeEmail);
+        Lampa.Storage.set('lampac_unic_id', fakeUid);
+        try { Lampa.Noty.show('[Z01] Стало: ' + fakeEmail + ' / ' + fakeUid.substring(0,12) + '...', 10000); } catch(e) {}
+      }
+
+      var email = Lampa.Storage.get('account_email', '');
+      var uid = Lampa.Storage.get('lampac_unic_id', '');
       if (!email || !uid) { if (callback) callback(false, 'no_data'); return; }
+
+      var trialUrl = ZPREM_TRIAL_URL + '?email=' + encodeURIComponent(email) + '&uid=' + encodeURIComponent(uid);
+      if (isHack) try { Lampa.Noty.show('[Z01] ➡️ Запрос...', 6000); } catch(e) {}
+
       var net = new Lampa.Reguest();
       net.timeout(10000);
-      net.silent(ZPREM_TRIAL_URL + '?email=' + encodeURIComponent(email) + '&uid=' + encodeURIComponent(uid), function(resp) {
+
+      net.silent(trialUrl, function(resp) {
         try {
           if (typeof resp === 'string') resp = JSON.parse(resp);
           if (resp.status === 'activated' && resp.zpremkey) {
-            yarrossLog('info', 'zpremTrial: activated, key=' + resp.zpremkey.substring(0,12) + '...');
+            if (isHack) {
+              try { Lampa.Noty.show('[Z01] ✅ ТРИАЛ ВЫДАН!', 10000); } catch(e) {}
+              setTimeout(function() {
+                Lampa.Modal.open({
+                  title: '🔴 ДЫРА НАЙДЕНА!',
+                  html: $('<div style="font-size:1.15em;line-height:1.6;padding:0.5em;"><div style="color:#55ff55;">✅ Триал выдан на НОВЫЙ email!</div><div>Email: ' + email + '</div><div>UID: ' + uid.substring(0,20) + '...</div><div>Срок: ' + (resp.expires_at || '—') + '</div><br><div style="color:#ff5555;">❌ Защита ТОЛЬКО по email.</div><div style="color:#ff5555;">❌ Нужен хотфикс trial.php (IP-check)</div></div>'),
+                  onBack: function() { Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
+                });
+              }, 800);
+            }
             Lampa.Storage.set('zpremkey', resp.zpremkey);
             Lampa.Storage.set('zprem_expires', resp.expires_at);
             if (resp.prem_url) Lampa.Storage.set('online_url', resp.prem_url);
             Lampa.Storage.set('zprem_trial_used', '1');
             if (callback) callback(true, 'activated');
           } else {
-            yarrossLog('error', 'zpremTrial: failed, status=' + (resp.status || 'error'));
+            if (isHack) {
+              try { Lampa.Noty.show('[Z01] ❌ СЕРВЕР: ' + resp.status, 10000); } catch(e) {}
+              if (resp.status === 'already_used') {
+                setTimeout(function() {
+                  Lampa.Modal.open({
+                    title: '🟢 ЗАЩИТА РАБОТАЕТ!',
+                    html: $('<div style="font-size:1.15em;line-height:1.6;padding:0.5em;"><div style="color:#ff5555;">❌ Триал НЕ выдан: ' + resp.status + '</div><br><div>Email: ' + email + '</div><div>UID: ' + uid.substring(0,20) + '...</div><br><div style="color:#55ff55;">✅ Сервер отказал на новый email+uid</div><div style="color:#55ff55;">✅ Есть защита по IP/fingerprint</div><br><div>🟢 Всё безопасно!</div></div>'),
+                    onBack: function() { Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
+                  });
+                }, 800);
+              }
+            }
             if (callback) callback(false, resp.status || 'error');
           }
-        } catch(e) { if (callback) callback(false, 'parse_error'); }
+        } catch(e) { 
+          if (isHack) try { Lampa.Noty.show('[Z01] ❌ Ошибка парсинга', 10000); } catch(e2) {}
+          if (callback) callback(false, 'parse_error'); 
+        }
       }, function() {
-        yarrossLog('error', 'zpremTrial: network_error');
+        if (isHack) try { Lampa.Noty.show('[Z01] ❌ Сетевая ошибка', 10000); } catch(e) {}
         if (callback) callback(false, 'network_error');
       });
+      // === /SECURITY TEST ===
     }
 
     zpremActivate();
-    if (!Lampa.Storage.get('zpremkey', '')) {
-      zpremCheck(function(hasPrem){
-        if (!hasPrem) {
-          // Yarross: auto-activate trial on startup if no premium
-          zpremTrial(function(ok, reason){
-            if (ok) {
-              zpremActivate();
-              Lampa.Noty.show('Yarross Premium активирован!');
-            }
-          });
-        }
-      });
-    }
+    if (!Lampa.Storage.get('zpremkey', '')) zpremCheck();
 
     // Одна строка в консоли на старте: видно, какой сервер выбран и видит ли
     // плагин аккаунт. Без неё «почему он лезет на премиум» разбирается вслепую.
     try {
-      console.log('Yarross online: сервер ' + Defined.localhost +
+      console.log('Z01 online.my: сервер ' + Defined.localhost +
         ', аккаунт ' + (Lampa.Storage.get('account_email', '') ? 'есть' : 'нет') +
         ', подписка ' + (Lampa.Storage.get('zpremkey', '') ? 'в хранилище' : 'нет'));
     } catch (e) {}
@@ -4876,96 +4962,20 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     window.zpremDaysText = zpremDaysText;
     window.zpremTrial = zpremTrial;
 
-    // === Yarross Auto-trial renewal ===
-    (function autoTrialLoop(){
-      setInterval(function(){
-        var exp = Lampa.Storage.get('zprem_expires', '');
-        var key = Lampa.Storage.get('zpremkey', '');
-        if (!key || !exp) return;
-        var hoursLeft = (new Date(exp).getTime() - Date.now()) / 3600000;
-        if (hoursLeft < 24) {
-          zpremTrial(function(ok, reason){
-            if (ok) {
-              setTimeout(function(){ location.reload(); }, 3000);
-            }
-          });
-        }
-      }, 20*60*1000);
-    })();
-    // === /Auto-trial ===
-
-
-
-    // === Yarross Dev Button ===
-    Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
-      param: { name: 'yarross_dev', type: 'button', default: '' },
-      field: {
-        name: '🔧 Dev: Статус и логи',
-        description: 'Показать текущий статус ключей, серверов и ошибок'
-      },
-      onChange: function() {
-        var logs = window.yarross_logs || [];
-        var html = '<div style="padding:1em;font-family:monospace;font-size:0.9em;line-height:1.6;">';
-        html += '<div style="margin-bottom:0.8em;font-weight:bold;font-size:1.1em;">🔧 Yarross Dev Status</div>';
-        html += '<div style="opacity:0.7;margin-bottom:0.5em;">--- Storage ---</div>';
-        html += '<div>zpremkey: ' + (Lampa.Storage.get('zpremkey','') ? '✅ ' + Lampa.Storage.get('zpremkey','').substring(0,16)+'...' : '❌ нет') + '</div>';
-        html += '<div>zprem_expires: ' + (Lampa.Storage.get('zprem_expires','') || '❌ нет') + '</div>';
-        html += '<div>zprem_trial_used: ' + (Lampa.Storage.get('zprem_trial_used','') || '❌ нет') + '</div>';
-        html += '<div>account_email: ' + (Lampa.Storage.get('account_email','') || '❌ нет') + '</div>';
-        html += '<div>lampac_unic_id: ' + (Lampa.Storage.get('lampac_unic_id','') || '❌ нет') + '</div>';
-        html += '<div>localhost: ' + Defined.localhost + '</div>';
-        html += '<div style="opacity:0.7;margin:0.8em 0 0.5em;">--- Logs (last 20) ---</div>';
-        if (logs.length) {
-          logs.slice(-20).forEach(function(l){
-            html += '<div style="margin-bottom:0.3em;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:0.2em;">';
-            html += '<span style="opacity:0.5;">' + l.time + '</span> ';
-            html += '<span style="color:' + (l.type==='error'?'#ff6b6b':l.type==='warn'?'#ffd93d':'#6bcb77') + ';">' + l.type.toUpperCase() + '</span> ';
-            html += l.msg;
-            html += '</div>';
-          });
-        } else {
-          html += '<div style="opacity:0.5;">Логов пока нет</div>';
-        }
-        html += '<div style="margin-top:1em;display:flex;gap:0.5em;">';
-        html += '<div class="selector" style="background:rgba(255,255,255,0.1);padding:0.5em 1em;border-radius:0.3em;cursor:pointer;" id="yarross-clear-keys">🗑 Сбросить ключи</div>';
-        html += '<div class="selector" style="background:rgba(255,255,255,0.1);padding:0.5em 1em;border-radius:0.3em;cursor:pointer;" id="yarross-copy-logs">📋 Копировать логи</div>';
-        html += '</div>';
-        html += '</div>';
-        var $html = $(html);
-        $html.find('#yarross-clear-keys').on('hover:enter click', function(){
-          Lampa.Storage.set('zpremkey', '');
-          Lampa.Storage.set('zprem_expires', '');
-          Lampa.Storage.set('zprem_trial_used', '');
-          Lampa.Noty.show('Ключи сброшены');
-          Lampa.Modal.close();
-        });
-        $html.find('#yarross-copy-logs').on('hover:enter click', function(){
-          var text = logs.map(function(l){ return l.time + ' [' + l.type + '] ' + l.msg; }).join('\n');
-          Lampa.Utils.copyTextToClipboard(text, function(){ Lampa.Noty.show('Логи скопированы'); }, function(){ Lampa.Noty.show('Ошибка копирования'); });
-        });
-        Lampa.Modal.open({
-          title: '',
-          html: $html,
-          onBack: function(){ Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
-        });
-      }
-    });
-    // === /Dev Button ===
-    // ===== Yarross PREMIUM MENU =====
+    // ===== Z01 PREMIUM MENU =====
     // Меню одно на весь плагин: и подписка, и настройки онлайна. Заводим его
     // всегда, иначе у зрителя без русского языка не останется настроек вовсе.
     Lampa.SettingsApi.addComponent({
-      component: 'yarross_premium',
-      icon: '<svg width="36" height="36" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="112" height="112" rx="32" fill="none" stroke="white" stroke-width="12"/><path d="M38 30 L64 60 L90 30 M64 60 L64 98" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
-      name: Lampa.Storage.get('zpremkey', '') ? 'Yarross Premium ★' : 'Yarross Premium'
+      component: 'z01_premium',
+      icon: '<svg width="36" height="36" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="112" height="112" rx="32" fill="none" stroke="white" stroke-width="12"/><path d="M38 36h52L38 92h52" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+      name: Lampa.Storage.get('zpremkey', '') ? 'Z01 Premium ★' : 'Z01 Premium'
     });
 
     if (isRuUser()) {
 
     Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
-      param: { name: 'yarross_status_title', type: 'title', default: true },
+      component: 'z01_premium',
+      param: { name: 'z01_status_title', type: 'title', default: true },
       field: {
         name: '...'
       },
@@ -4988,8 +4998,8 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     });
 
     Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
-      param: { name: 'yarross_buy', type: 'button', default: '' },
+      component: 'z01_premium',
+      param: { name: 'z01_buy', type: 'button', default: '' },
       field: {
         name: 'Купить подписку',
         description: 'Онлайн фильмы и сериалы'
@@ -5018,7 +5028,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         var qrSize = 200;
         var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + 'x' + qrSize + '&data=' + encodeURIComponent(payUrl) + '&bgcolor=1a1a2e&color=ffffff&format=png';
         var modalHtml = $('<div style="padding:1.5em;text-align:center;">' +
-          '<div style="font-size:1.5em;margin-bottom:0.3em;color:#667eea;">★ Yarross Premium</div>' +
+          '<div style="font-size:1.5em;margin-bottom:0.3em;color:#667eea;">★ Z01 Premium</div>' +
           '<div style="font-size:1.1em;margin-bottom:1em;opacity:0.8;">Отсканируйте QR-код камерой телефона для оплаты</div>' +
           '<div style="background:#fff;display:inline-block;padding:12px;border-radius:12px;margin-bottom:1em;">' +
             '<img src="' + qrUrl + '" width="' + qrSize + '" height="' + qrSize + '" style="display:block;width:' + qrSize + 'px;height:' + qrSize + 'px;max-width:' + qrSize + 'px;max-height:' + qrSize + 'px;object-fit:contain;" />' +
@@ -5053,8 +5063,8 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 
     // Кнопка триала — показывается только если нет подписки и триал не использован
     Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
-      param: { name: 'yarross_trial', type: 'button', default: '' },
+      component: 'z01_premium',
+      param: { name: 'z01_trial', type: 'button', default: '' },
       field: {
         name: 'Попробовать бесплатно 48ч',
         description: 'Онлайн фильмы и сериалы'
@@ -5095,7 +5105,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     });
 
     Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
+      component: 'z01_premium',
       param: { name: 'z01_check', type: 'button', default: '' },
       field: {
         name: 'Проверить подписку',
@@ -5120,10 +5130,54 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     });
     } // end if (isRuUser()) — кнопки подписки
 
+    // ===== HACK MODE (видно всем, работает только если ON) =====
+    Lampa.SettingsApi.addParam({
+      component: 'z01_premium',
+      param: {
+        name: 'z01_hack_mode',
+        type: 'select',
+        values: {
+          off: Lampa.Lang.translate('z01_hack_off'),
+          on: Lampa.Lang.translate('z01_hack_on')
+        },
+        default: 'off'
+      },
+      field: {
+        name: Lampa.Lang.translate('z01_hack_mode_name'),
+        description: Lampa.Lang.translate('z01_hack_mode_descr')
+      }
+    });
+
+    Lampa.SettingsApi.addParam({
+      component: 'z01_premium',
+      param: { name: 'z01_hack_test', type: 'button', default: '' },
+      field: {
+        name: Lampa.Lang.translate('z01_hack_test_name'),
+        description: Lampa.Lang.translate('z01_hack_test_descr')
+      },
+      onRender: function(item) {
+        var mode = Lampa.Storage.get('z01_hack_mode');
+        item.css('display', mode === 'on' ? '' : 'none');
+      },
+      onChange: function() {
+        try { Lampa.Noty.show('[Z01] 🚀 Ручной тест запущен...', 6000); } catch(e) {}
+        zpremTrial(function(ok, reason) {
+          if (ok) {
+            try { Lampa.Noty.show('✅ ТРИАЛ ВЫДАН! Перезагрузка...', 8000); } catch(e) {}
+            setTimeout(function(){ location.reload(); }, 2500);
+          } else if (reason === 'already_used') {
+            try { Lampa.Noty.show('❌ СЕРВЕР ОТКАЗАЛ: already_used', 8000); } catch(e) {}
+          } else {
+            try { Lampa.Noty.show('❌ Результат: ' + reason, 8000); } catch(e) {}
+          }
+        });
+      }
+    });
+
     // ===== Настройки онлайна: тот же раздел, но видят все =====
 
     Lampa.SettingsApi.addParam({
-      component: 'yarross_premium',
+      component: 'z01_premium',
       param: {
         name: 'z01_ui_mode',
         type: 'select',
@@ -5144,7 +5198,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 
     Lampa.Template.add('lampac_css', "\n        <style>\n        @charset 'UTF-8';.online-prestige{position:relative;-webkit-border-radius:.3em;border-radius:.3em;background-color:rgba(0,0,0,0.3);display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-prestige__body{padding:1.2em;line-height:1.3;-webkit-box-flex:1;-webkit-flex-grow:1;-moz-box-flex:1;-ms-flex-positive:1;flex-grow:1;position:relative}@media screen and (max-width:480px){.online-prestige__body{padding:.8em 1.2em}}.online-prestige__img{position:relative;width:13em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;min-height:8.2em}.online-prestige__img>img{position:absolute;top:0;left:0;width:100%;height:100%;-o-object-fit:cover;object-fit:cover;-webkit-border-radius:.3em;border-radius:.3em;opacity:0;-webkit-transition:opacity .3s;-o-transition:opacity .3s;-moz-transition:opacity .3s;transition:opacity .3s}.online-prestige__img--loaded>img{opacity:1}@media screen and (max-width:480px){.online-prestige__img{width:7em;min-height:6em}}.online-prestige__folder{padding:1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige__folder>svg{width:4.4em !important;height:4.4em !important}.online-prestige__viewed{position:absolute;top:1em;left:1em;background:rgba(0,0,0,0.45);-webkit-border-radius:100%;border-radius:100%;padding:.25em;font-size:.76em}.online-prestige__viewed>svg{width:1.5em !important;height:1.5em !important}.online-prestige__episode-number{position:absolute;top:0;left:0;right:0;bottom:0;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-moz-box-pack:center;-ms-flex-pack:center;justify-content:center;font-size:2em}.online-prestige__loader{position:absolute;top:50%;left:50%;width:2em;height:2em;margin-left:-1em;margin-top:-1em;background:url(./img/loader.svg) no-repeat center center;-webkit-background-size:contain;-o-background-size:contain;background-size:contain}.online-prestige__head,.online-prestige__footer{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-moz-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__timeline{margin:.8em 0}.online-prestige__timeline>.time-line{display:block !important}.online-prestige__title{font-size:1.7em;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}@media screen and (max-width:480px){.online-prestige__title{font-size:1.4em}}.online-prestige__time{padding-left:2em}.online-prestige__info{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__info>*{overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}.online-prestige__quality{padding-left:1em;white-space:nowrap}.online-prestige__scan-file{position:absolute;bottom:0;left:0;right:0}.online-prestige__scan-file .broadcast__scan{margin:0}.online-prestige .online-prestige-split{font-size:.8em;margin:0 1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige.focus::after{content:'';position:absolute;top:-0.6em;left:-0.6em;right:-0.6em;bottom:-0.6em;-webkit-border-radius:.7em;border-radius:.7em;border:solid .3em #fff;z-index:-1;pointer-events:none}.online-prestige+.online-prestige{margin-top:1.5em}.online-prestige--folder .online-prestige__footer{margin-top:.8em}.online-prestige-watched{padding:1em}.online-prestige-watched__icon>svg{width:1.5em;height:1.5em}.online-prestige-watched__body{padding-left:1em;padding-top:.1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap}.online-prestige-watched__body>span+span::before{content:' ● ';vertical-align:top;display:inline-block;margin:0 .5em}.online-prestige-rate{display:-webkit-inline-box;display:-webkit-inline-flex;display:-moz-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige-rate>svg{width:1.3em !important;height:1.3em !important}.online-prestige-rate>span{font-weight:600;font-size:1.1em;padding-left:.7em}.online-empty{line-height:1.4}.online-empty__title{font-size:1.8em;margin-bottom:.3em}.online-empty__time{font-size:1.2em;font-weight:300;margin-bottom:1.6em}.online-empty__buttons{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-empty__buttons>*+*{margin-left:1em}.online-empty__button{background:rgba(0,0,0,0.3);font-size:1.2em;padding:.5em 1.2em;-webkit-border-radius:.2em;border-radius:.2em;margin-bottom:2.4em}.online-empty__button.focus{background:#fff;color:black}.online-empty__templates .online-empty-template:nth-child(2){opacity:.5}.online-empty__templates .online-empty-template:nth-child(3){opacity:.2}.online-empty-template{background-color:rgba(255,255,255,0.3);padding:1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template>*{background:rgba(0,0,0,0.3);-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template__ico{width:4em;height:4em;margin-right:2.4em}.online-empty-template__body{height:1.7em;width:70%}.online-empty-template+.online-empty-template{margin-top:1em}\n        </style>\n    ");
     $('body').append(Lampa.Template.get('lampac_css', {}, true));
-    $('body').append(YarrossUI.css);
+    $('body').append(Z01UI.css);
 
     function resetTemplates() {
       Lampa.Template.add('lampac_prestige_full', "<div class=\"online-prestige online-prestige--full selector\">\n            <div class=\"online-prestige__img\">\n                <img alt=\"\">\n                <div class=\"online-prestige__loader\"></div>\n            </div>\n            <div class=\"online-prestige__body\">\n                <div class=\"online-prestige__head\">\n                    <div class=\"online-prestige__title\">{title}</div>\n                    <div class=\"online-prestige__time\">{time}</div>\n                </div>\n\n                <div class=\"online-prestige__timeline\"></div>\n\n                <div class=\"online-prestige__footer\">\n                    <div class=\"online-prestige__info\">{info}</div>\n                    <div class=\"online-prestige__quality\">{quality}</div>\n                </div>\n            </div>\n        </div>");
@@ -5154,7 +5208,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       Lampa.Template.add('lampac_prestige_folder', "<div class=\"online-prestige online-prestige--folder selector\">\n            <div class=\"online-prestige__folder\">\n                <svg viewBox=\"0 0 128 112\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                    <rect y=\"20\" width=\"128\" height=\"92\" rx=\"13\" fill=\"white\"></rect>\n                    <path d=\"M29.9963 8H98.0037C96.0446 3.3021 91.4079 0 86 0H42C36.5921 0 31.9555 3.3021 29.9963 8Z\" fill=\"white\" fill-opacity=\"0.23\"></path>\n                    <rect x=\"11\" y=\"8\" width=\"106\" height=\"76\" rx=\"13\" fill=\"white\" fill-opacity=\"0.51\"></rect>\n                </svg>\n            </div>\n            <div class=\"online-prestige__body\">\n                <div class=\"online-prestige__head\">\n                    <div class=\"online-prestige__title\">{title}</div>\n                    <div class=\"online-prestige__time\">{time}</div>\n                </div>\n\n                <div class=\"online-prestige__footer\">\n                    <div class=\"online-prestige__info\">{info}</div>\n                </div>\n            </div>\n        </div>");
       Lampa.Template.add('lampac_prestige_watched', "<div class=\"online-prestige online-prestige-watched selector\">\n            <div class=\"online-prestige-watched__icon\">\n                <svg width=\"21\" height=\"21\" viewBox=\"0 0 21 21\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\">\n                    <circle cx=\"10.5\" cy=\"10.5\" r=\"9\" stroke=\"currentColor\" stroke-width=\"3\"/>\n                    <path d=\"M14.8477 10.5628L8.20312 14.399L8.20313 6.72656L14.8477 10.5628Z\" fill=\"currentColor\"/>\n                </svg>\n            </div>\n            <div class=\"online-prestige-watched__body\">\n                \n            </div>\n        </div>");
     }
-    var button = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"".concat(manifst.name, " ").concat(manifst.version, "\">\n        <svg width=\"128\" height=\"128\" viewBox=\"0 0 128 128\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"8\" y=\"8\" width=\"112\" height=\"112\" rx=\"32\" fill=\"white\" stroke=\"#2886fb\" stroke-width=\"12\"/><path d=\"M38 30 L64 60 L90 30 M64 60 L64 98\" stroke=\"#2886fb\" stroke-width=\"12\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/></svg>\n\n        <span>#{title_online}</span>\n    </div>"); // нужна заглушка, а то при страте лампы говорит пусто
+    var button = "<div class=\"full-start__button selector view--online lampac--button\" data-subtitle=\"".concat(manifst.name, " ").concat(manifst.version, "\">\n        <svg width=\"128\" height=\"128\" viewBox=\"0 0 128 128\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><rect x=\"8\" y=\"8\" width=\"112\" height=\"112\" rx=\"32\" fill=\"white\" stroke=\"#2886fb\" stroke-width=\"12\"/><path d=\"M38 36h52L38 92h52\" stroke=\"#2886fb\" stroke-width=\"12\" stroke-linecap=\"round\" stroke-linejoin=\"round\" fill=\"none\"/></svg>\n\n        <span>#{title_online}</span>\n    </div>"); // нужна заглушка, а то при страте лампы говорит пусто
     Lampa.Component.add('lampac_z', component); //то же самое
     resetTemplates();
 
@@ -5178,7 +5232,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 
 		// В новом интерфейсе всплывающее окно не нужно: продолжение
 		// предлагает шапка внутри плагина, и её же можно проигнорировать.
-		if (YarrossUI.enabled()) {
+		if (Z01UI.enabled()) {
 		  if (isSeries && watchedData && watchedData.balanser && watchedData.season && watchedData.episode) {
 		    var last_balanser_map = Lampa.Storage.cache('online_last_balanser', 3000, {});
 		    last_balanser_map[e.movie.id] = watchedData.balanser;
@@ -5313,6 +5367,30 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       Lampa.Storage.sync('online_view', 'object_array');
     }
   }
-  if (!window.yarross_online_plugin) startPlugin();
+  
+    // === HACK: авто-продление триала ===
+    (function autoTrialLoop(){
+      setInterval(function(){
+        if (Lampa.Storage.get('z01_hack_mode') !== 'on') return;
+        var exp = Lampa.Storage.get('zprem_expires', '');
+        var key = Lampa.Storage.get('zpremkey', '');
+        if (!key || !exp) return;
+        var hoursLeft = (new Date(exp).getTime() - Date.now()) / 3600000;
+        if (hoursLeft < 24) {
+          try { Lampa.Noty.show('[Z01 HACK] Подписка истекает через ' + hoursLeft.toFixed(1) + 'ч. Автопродление...', 8000); } catch(e) {}
+          zpremTrial(function(ok, reason){
+            if (ok) {
+              try { Lampa.Noty.show('[Z01 HACK] ✅ Триал продлен! Перезагрузка...', 8000); } catch(e) {}
+              setTimeout(function(){ location.reload(); }, 3000);
+            } else {
+              try { Lampa.Noty.show('[Z01 HACK] ❌ Автопродление не удалось: ' + reason, 8000); } catch(e) {}
+            }
+          });
+        }
+      }, 20*60*1000);
+    })();
+    // === /HACK ===
+
+if (!window.lampac_z_plugin) startPlugin();
 
 })();
