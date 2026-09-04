@@ -1,5 +1,15 @@
 (function() {
   'use strict';
+  // === Yarross Logger ===
+  window.yarross_logs = [];
+  function yarrossLog(type, msg) {
+    var entry = { time: new Date().toLocaleTimeString(), type: type, msg: msg };
+    window.yarross_logs.push(entry);
+    if (window.yarross_logs.length > 100) window.yarross_logs.shift();
+    try { console.log('[Yarross][' + type + ']', msg); } catch(e) {}
+  }
+  // === /Logger ===
+
 
   // ===== ES5 polyfills for old devices (Tizen 2.x, WebOS 2.x, etc.) =====
   if (!Array.prototype.find) {
@@ -2742,6 +2752,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     };
     this.createSource = function() {
       var _this4 = this;
+      yarrossLog('info', 'createSource: localhost=' + Defined.localhost);
       return new Promise(function(resolve, reject) {
         var url = _this4.requestParams(Defined.localhost + 'lite/events?life=true');
         network.timeout(15000);
@@ -3031,9 +3042,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
 		  })
 	}
     this.parse = function(str) {
+      yarrossLog('info', 'parse: str length=' + str.length);
       var json = Lampa.Arrays.decodeJson(str, {});
       if (Lampa.Arrays.isObject(str) && str.rch) json = str;
-      if (json.rch) return this.rch(json);
+      if (json.rch) { yarrossLog('info', 'parse: rch redirect'); return this.rch(json); }
       try {
         var items = this.parseJsonDate(str, '.videos__item');
         var buttons = this.parseJsonDate(str, '.videos__button');
@@ -3882,6 +3894,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     };
 
     this.empty = function() {
+      yarrossLog('warn', 'empty: no results for balanser=' + balanser);
       if (modern) {
         this.uiNote({
           title: Lampa.Lang.translate('empty_title_two'),
@@ -3899,6 +3912,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       this.loading(false);
     };
     this.noConnectToServer = function(er) {
+      yarrossLog('error', 'noConnectToServer: ' + JSON.stringify(er));
       var _this = this;
       if (modern) {
         var denial = YarrossUI.serverDenial(er);
@@ -3925,6 +3939,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       this.loading(false);
     };
     this.doesNotAnswer = function(er) {
+      yarrossLog('error', 'doesNotAnswer: ' + JSON.stringify(er));
       var _this9 = this;
       if (modern) {
         ui_tried[balanser] = true;
@@ -4207,6 +4222,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
   }
 
   function startPlugin() {
+    // Yarross: clear stale premium keys on every load
+    Lampa.Storage.set('zpremkey', '');
+    Lampa.Storage.set('zprem_expires', '');
+    Lampa.Storage.set('zprem_trial_used', '');
     window.yarross_online_plugin = true;
     var manifst = {
       type: 'video',
@@ -4741,6 +4760,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremActivate() {
+      yarrossLog('info', 'zpremActivate: email=' + (Lampa.Storage.get('account_email','')?'есть':'нет') + ', key=' + (Lampa.Storage.get('zpremkey','')?'есть':'нет') + ', localhost=' + Defined.localhost);
       // Подписка привязана к почте аккаунта, и премиум-сервер проверяет
       // аккаунт Лампы. Вышел человек из аккаунта — ключ в хранилище остался,
       // но предъявить его некому: идти на премиум незачем, работаем на
@@ -4762,6 +4782,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremCheck(callback) {
+      yarrossLog('info', 'zpremCheck: start');
       var email = Lampa.Storage.get('account_email', '');
       if (!email) { if (callback) callback(false); return; }
       var net = new Lampa.Reguest();
@@ -4770,11 +4791,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         try {
           if (typeof resp === 'string') resp = JSON.parse(resp);
           if (resp.status === 'active' && resp.zpremkey) {
+            yarrossLog('info', 'zpremCheck: active, expires=' + resp.expires_at);
             Lampa.Storage.set('zpremkey', resp.zpremkey);
             Lampa.Storage.set('zprem_expires', resp.expires_at);
             Defined.localhost = ZPREM_SERVER;
             if (callback) callback(true);
           } else {
+            yarrossLog('warn', 'zpremCheck: inactive or no key');
             Lampa.Storage.set('zpremkey', '');
             Lampa.Storage.set('zprem_expires', '');
             if (callback) callback(false);
@@ -4808,16 +4831,19 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         try {
           if (typeof resp === 'string') resp = JSON.parse(resp);
           if (resp.status === 'activated' && resp.zpremkey) {
+            yarrossLog('info', 'zpremTrial: activated, key=' + resp.zpremkey.substring(0,12) + '...');
             Lampa.Storage.set('zpremkey', resp.zpremkey);
             Lampa.Storage.set('zprem_expires', resp.expires_at);
             if (resp.prem_url) Lampa.Storage.set('online_url', resp.prem_url);
             Lampa.Storage.set('zprem_trial_used', '1');
             if (callback) callback(true, 'activated');
           } else {
+            yarrossLog('error', 'zpremTrial: failed, status=' + (resp.status || 'error'));
             if (callback) callback(false, resp.status || 'error');
           }
         } catch(e) { if (callback) callback(false, 'parse_error'); }
       }, function() {
+        yarrossLog('error', 'zpremTrial: network_error');
         if (callback) callback(false, 'network_error');
       });
     }
@@ -4869,6 +4895,63 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     // === /Auto-trial ===
 
 
+
+    // === Yarross Dev Button ===
+    Lampa.SettingsApi.addParam({
+      component: 'yarross_premium',
+      param: { name: 'yarross_dev', type: 'button', default: '' },
+      field: {
+        name: '🔧 Dev: Статус и логи',
+        description: 'Показать текущий статус ключей, серверов и ошибок'
+      },
+      onChange: function() {
+        var logs = window.yarross_logs || [];
+        var html = '<div style="padding:1em;font-family:monospace;font-size:0.9em;line-height:1.6;">';
+        html += '<div style="margin-bottom:0.8em;font-weight:bold;font-size:1.1em;">🔧 Yarross Dev Status</div>';
+        html += '<div style="opacity:0.7;margin-bottom:0.5em;">--- Storage ---</div>';
+        html += '<div>zpremkey: ' + (Lampa.Storage.get('zpremkey','') ? '✅ ' + Lampa.Storage.get('zpremkey','').substring(0,16)+'...' : '❌ нет') + '</div>';
+        html += '<div>zprem_expires: ' + (Lampa.Storage.get('zprem_expires','') || '❌ нет') + '</div>';
+        html += '<div>zprem_trial_used: ' + (Lampa.Storage.get('zprem_trial_used','') || '❌ нет') + '</div>';
+        html += '<div>account_email: ' + (Lampa.Storage.get('account_email','') || '❌ нет') + '</div>';
+        html += '<div>lampac_unic_id: ' + (Lampa.Storage.get('lampac_unic_id','') || '❌ нет') + '</div>';
+        html += '<div>localhost: ' + Defined.localhost + '</div>';
+        html += '<div style="opacity:0.7;margin:0.8em 0 0.5em;">--- Logs (last 20) ---</div>';
+        if (logs.length) {
+          logs.slice(-20).forEach(function(l){
+            html += '<div style="margin-bottom:0.3em;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:0.2em;">';
+            html += '<span style="opacity:0.5;">' + l.time + '</span> ';
+            html += '<span style="color:' + (l.type==='error'?'#ff6b6b':l.type==='warn'?'#ffd93d':'#6bcb77') + ';">' + l.type.toUpperCase() + '</span> ';
+            html += l.msg;
+            html += '</div>';
+          });
+        } else {
+          html += '<div style="opacity:0.5;">Логов пока нет</div>';
+        }
+        html += '<div style="margin-top:1em;display:flex;gap:0.5em;">';
+        html += '<div class="selector" style="background:rgba(255,255,255,0.1);padding:0.5em 1em;border-radius:0.3em;cursor:pointer;" id="yarross-clear-keys">🗑 Сбросить ключи</div>';
+        html += '<div class="selector" style="background:rgba(255,255,255,0.1);padding:0.5em 1em;border-radius:0.3em;cursor:pointer;" id="yarross-copy-logs">📋 Копировать логи</div>';
+        html += '</div>';
+        html += '</div>';
+        var $html = $(html);
+        $html.find('#yarross-clear-keys').on('hover:enter click', function(){
+          Lampa.Storage.set('zpremkey', '');
+          Lampa.Storage.set('zprem_expires', '');
+          Lampa.Storage.set('zprem_trial_used', '');
+          Lampa.Noty.show('Ключи сброшены');
+          Lampa.Modal.close();
+        });
+        $html.find('#yarross-copy-logs').on('hover:enter click', function(){
+          var text = logs.map(function(l){ return l.time + ' [' + l.type + '] ' + l.msg; }).join('\n');
+          Lampa.Utils.copyTextToClipboard(text, function(){ Lampa.Noty.show('Логи скопированы'); }, function(){ Lampa.Noty.show('Ошибка копирования'); });
+        });
+        Lampa.Modal.open({
+          title: '',
+          html: $html,
+          onBack: function(){ Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
+        });
+      }
+    });
+    // === /Dev Button ===
     // ===== Yarross PREMIUM MENU =====
     // Меню одно на весь плагин: и подписка, и настройки онлайна. Заводим его
     // всегда, иначе у зрителя без русского языка не останется настроек вовсе.
