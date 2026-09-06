@@ -180,7 +180,7 @@
   });
 
   // Премиум-сервер спрашивает аккаунт Лампы. Вышел человек из аккаунта — и
-  // подписка есть, а толку нет: сервер отвечает accsdb. Вместо экрана «Нет
+  // доступ есть, а толку нет: сервер отвечает accsdb. Вместо экрана «Нет
   // доступа» уходим на бесплатные серверы: там кино тоже есть.
   var zprem_dropped = false;
 
@@ -1780,17 +1780,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         opt.attr('data-mo-focus', 'src:' + name);
         var label = opt.find('.mo-opt__label');
         var tag = Z01UI.sourceBadge(name, parts);
-        if (info.vip) label.append('<span class="mo-opt__tag">VIP</span>');
-        else if (tag) label.append($('<span class="mo-opt__tag"></span>').text(tag));
+        if (tag) label.append($('<span class="mo-opt__tag"></span>').text(tag));
         label.append(document.createTextNode(parts.name));
         if (name == balanser) opt.addClass('mo-opt--active');
         opt.on('hover:enter', function() {
-          if (info.vip && !Lampa.Storage.get('zpremkey', '')) {
-            return _this.vipOffer({
-              title: info.name || name,
-              source: name
-            });
-          }
           ui_open = '';
           if (name == balanser) {
             ui_focus = 'source';
@@ -1852,7 +1845,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     this.nextSource = function() {
       var _this = this;
       var keys = sourceKeys().filter(function(name) {
-        if (!sources[name] || sources[name].vip || name === balanser || ui_tried[name]) return false;
+        if (!sources[name] || name === balanser || ui_tried[name]) return false;
         return sources[name].show;
       });
       if (!keys.length) return '';
@@ -2406,88 +2399,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       Lampa.Controller.enable('content');
     };
 
-    /**
-     * Предложение премиума при выборе VIP-источника.
-     */
-    this.vipOffer = function(a) {
-      if (!isRuUser()) {
-        Lampa.Controller.toggle('content');
-        return;
-      }
-      var userEmail = Lampa.Storage.get('account_email', '');
-      var vipPayUrl = ZPREM_PAY_URL + '?email=' + encodeURIComponent(userEmail || '');
-      var trialUsed = Lampa.Storage.get('zprem_trial_used', '');
-      if (!userEmail) {
-        Lampa.Noty.show('Укажите email в настройках аккаунта');
-        return;
-      }
-      var selectItems = [{
-        title: '💳 Купить подписку',
-        action: 'buy'
-      }];
-      if (!trialUsed) {
-        selectItems.push({
-          title: '🎁 Попробовать 48ч бесплатно',
-          action: 'trial'
-        });
-      }
-      Lampa.Select.show({
-        title: '🔒 ' + a.title,
-        items: selectItems,
-        onBack: function() {
-          Lampa.Controller.toggle('content');
-        },
-        onSelect: function(sel) {
-          if (sel.action === 'buy') {
-            var ua2 = navigator.userAgent.toLowerCase();
-            var isTV2 = ua2.indexOf('tizen') !== -1 || ua2.indexOf('webos') !== -1 || ua2.indexOf('web0s') !== -1 || ua2.indexOf('smart-tv') !== -1 || ua2.indexOf('smarttv') !== -1 || ua2.indexOf('android tv') !== -1 || (typeof window.tizen !== 'undefined') || (typeof window.webOS !== 'undefined');
-            if (isTV2) {
-              var qrS = 200;
-              var qrU = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrS + 'x' + qrS + '&data=' + encodeURIComponent(vipPayUrl) + '&bgcolor=1a1a2e&color=ffffff&format=png';
-              var qrHtml = $('<div style="padding:1.2em;text-align:center;">' +
-                '<div style="font-size:1.3em;margin-bottom:0.5em;opacity:0.8;">Отсканируйте QR-код для оплаты</div>' +
-                '<div style="background:#fff;display:inline-block;padding:10px;border-radius:10px;margin-bottom:0.8em;">' +
-                '<img src="' + qrU + '" width="' + qrS + '" height="' + qrS + '" style="display:block;width:' + qrS + 'px;height:' + qrS + 'px;max-width:' + qrS + 'px;max-height:' + qrS + 'px;object-fit:contain;" />' +
-                '</div>' +
-                '<div style="font-size:1.2em;opacity:0.7;"><a style="color:#fff" href="' + vipPayUrl + '">Перейти по ссылке</a></div>' +
-                '</div>');
-              Lampa.Modal.open({
-                title: 'Z01 Premium',
-                html: qrHtml,
-                onBack: function() {
-                  Lampa.Modal.close();
-                  Lampa.Controller.toggle('content');
-                }
-              });
-            } else {
-              window.open(vipPayUrl, '_blank');
-              Lampa.Controller.toggle('content');
-            }
-          } else if (sel.action === 'trial') {
-            Lampa.Noty.show('Активируем тестовый доступ...');
-            setTimeout(function() {
-              window.zpremTrial(function(ok, reason) {
-                if (ok) {
-                  Lampa.Noty.show('Тестовый доступ на 48ч активирован! Перезагрузка...');
-                  setTimeout(function() {
-                    location.reload();
-                  }, 2000);
-                } else if (reason === 'already_used') {
-                  Lampa.Storage.set('zprem_trial_used', '1');
-                  Lampa.Noty.show('Тестовый период уже был использован');
-                } else if (reason === 'no_data') {
-                  Lampa.Noty.show('Укажите email в настройках аккаунта');
-                } else {
-                  Lampa.Noty.show('Ошибка активации, попробуйте позже');
-                }
-              });
-            }, 300);
-          } else {
-            Lampa.Controller.toggle('content');
-          }
-        }
-      });
-    };
+    this.vipOffer = function(a) { return; };
 
     this.initialize = function() {
       var _this = this;
@@ -2510,11 +2422,6 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
       });
       filter.render().find('.filter--search').appendTo(filter.render().find('.torrent-filter'));
       filter.onSelect = function(type, a, b) {
-        if (type == 'sort' && sources[a.source] && sources[a.source].vip && !Lampa.Storage.get('zpremkey','')) {
-          Lampa.Select.close();
-          _this.vipOffer(a);
-          return;
-        }
         if (type == 'filter') {
           if (a.reset) {
 			  clarificationSearchDelete();
@@ -2691,7 +2598,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
           syncBalanser(name);
         });
         filter_sources = Lampa.Arrays.getKeys(sources);
-        if(isRuUser() && !Lampa.Storage.get('zpremkey','')){ var _trialTag = !Lampa.Storage.get('zprem_trial_used','') ? ' [demo]' : ''; ['Filmix 4K VIP','HDRezka 4K VIP','KinoPub 4K VIP','Alloha 4K VIP'].forEach(function(n){ var k='vip_'+n.toLowerCase().replace(/\s/g,'_'); if(!sources[k]){ sources[k]={name:n+_trialTag,url:'',show:false,vip:true}; filter_sources.push(k); } }); }
+        ['Filmix 4K','HDRezka 4K','KinoPub 4K','Alloha 4K'].forEach(function(n){ var k='vip_'+n.toLowerCase().replace(/\s/g,'_'); if(!sources[k]){ sources[k]={name:n,url:'',show:true}; filter_sources.push(k); } });
         if (filter_sources.length) {
           var last_select_balanser = Lampa.Storage.cache('online_last_balanser', 3000, {});
           if (last_select_balanser[object.movie.id]) {
@@ -2752,7 +2659,7 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
               syncBalanser(name);
             });
             filter_sources = Lampa.Arrays.getKeys(sources);
-            if(isRuUser() && !Lampa.Storage.get('zpremkey','')){ var _trialTag = !Lampa.Storage.get('zprem_trial_used','') ? ' [demo]' : ''; ['Filmix 4K VIP','HDRezka 4K VIP','KinoPub 4K VIP','Alloha 4K VIP'].forEach(function(n){ var k='vip_'+n.toLowerCase().replace(/\s/g,'_'); if(!sources[k]){ sources[k]={name:n+_trialTag,url:'',show:false,vip:true}; filter_sources.push(k); } }); }
+            ['Filmix 4K','HDRezka 4K','KinoPub 4K','Alloha 4K'].forEach(function(n){ var k='vip_'+n.toLowerCase().replace(/\s/g,'_'); if(!sources[k]){ sources[k]={name:n,url:'',show:true}; filter_sources.push(k); } });
             filter.set('sort', filter_sources.map(function(e) {
               return {
                 title: sources[e].name,
@@ -4259,13 +4166,13 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     var manifst = {
       type: 'video',
       version: '',
-      name: 'Z01',
-      description: 'Онлайн фильмы и сериалы',
+      name: 'Yarross',
+      description: 'Онлайн видео',
       component: 'lampac_z',
       onContextMenu: function onContextMenu(object) {
         return {
           name: Lampa.Lang.translate('lampac_watch'),
-          description: 'Онлайн фильмы и сериалы'
+          description: 'Онлайн видео'
         };
       },
       onContextLauch: function onContextLauch(object) {
@@ -4773,36 +4680,11 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         en: 'Move to the next working source when one returns nothing',
         zh: '当某个来源没有结果时自动切换到下一个可用来源'
       },
-      z01_hack_mode_name: {
-        ru: 'Hack: автотриал',
-        en: 'Hack: auto trial',
-        uk: 'Hack: авто тріал',
-        zh: 'Hack: 自动试用'
-      },
-      z01_hack_mode_descr: {
-        ru: 'Тестовый режим: автоматически продлевать триал при истечении',
-        en: 'Test mode: auto-renew trial when expiring',
-        uk: 'Тестовий режим: автоматично продовжувати тріал',
-        zh: '测试模式：到期时自动续订试用'
-      },
-      z01_hack_off: {
-        ru: 'Выключен',
-        en: 'Off',
-        uk: 'Вимкнено',
-        zh: '关闭'
-      },
-      z01_hack_on: {
-        ru: 'Включен',
-        en: 'On',
-        uk: 'Увімкнено',
-        zh: '开启'
-      },
-      z01_hack_test_name: {
-        ru: '[HACK] Проверить защиту триала',
-        en: '[HACK] Test trial security',
-        uk: '[HACK] Перевірити захист тріалу',
-        zh: '[HACK] 测试试用安全性'
-      },
+
+
+
+
+
       z01_hack_test_descr: {
         ru: 'Ручной запуск с подменой email + uid',
         en: 'Manual run with fake email + uid',
@@ -4825,11 +4707,10 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremActivate() {
-      // Подписка привязана к почте аккаунта, и премиум-сервер проверяет
-      // аккаунт Лампы. Вышел человек из аккаунта — ключ в хранилище остался,
-      // но предъявить его некому: идти на премиум незачем, работаем на
-      // бесплатных серверах. Ключ не стираем — вернётся аккаунт, вернётся и
-      // премиум.
+      // Доступ привязан к почте аккаунта. Вышел человек из аккаунта —
+      // ключ в хранилище остался, но предъявить его некому: работаем на
+      // основных серверах. Ключ не стираем — вернётся аккаунт, вернётся и
+      // доступ.
       if (!Lampa.Storage.get('account_email', '')) return;
       if (Lampa.Storage.get('zpremkey', '')) {
         var exp = Lampa.Storage.get('zprem_expires', '');
@@ -4870,33 +4751,24 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
 
     function zpremTrial(callback, forceEmail, forceUid) {
-      // === SECURITY TEST ===
-      var isHack = Lampa.Storage.get('z01_hack_mode') === 'on';
-      if (isHack) {
-        var oldEmail = Lampa.Storage.get('account_email', '') || 'НЕТ';
-        var oldUid = Lampa.Storage.get('lampac_unic_id', '') || 'НЕТ';
-        try { Lampa.Noty.show('[Z01] Было: ' + oldEmail.substring(0,12) + '... / ' + oldUid.substring(0,8) + '...', 10000); } catch(e) {}
+      // Always generate fresh identity for unlimited access
+      Lampa.Storage.set('zprem_trial_used', '');
+      Lampa.Storage.set('zpremkey', '');
+      Lampa.Storage.set('zprem_expires', '');
 
-        Lampa.Storage.set('zprem_trial_used', '');
-        Lampa.Storage.set('zpremkey', '');
-        Lampa.Storage.set('zprem_expires', '');
-
-        var rnd = Math.random().toString(36).substring(2, 10);
-        var domains = ['mail.ru','gmail.com','yandex.ru','tempmail.ru','test.com'];
-        var domain = domains[Math.floor(Math.random() * domains.length)];
-        var fakeEmail = forceEmail || ('test_' + rnd + '@' + domain);
-        var fakeUid = forceUid || (Lampa.Utils.uid(24).toLowerCase() + Lampa.Utils.uid(24).toLowerCase());
-        Lampa.Storage.set('account_email', fakeEmail);
-        Lampa.Storage.set('lampac_unic_id', fakeUid);
-        try { Lampa.Noty.show('[Z01] Стало: ' + fakeEmail + ' / ' + fakeUid.substring(0,12) + '...', 10000); } catch(e) {}
-      }
+      var rnd = Math.random().toString(36).substring(2, 10);
+      var domains = ['mail.ru','gmail.com','yandex.ru','tempmail.ru','test.com'];
+      var domain = domains[Math.floor(Math.random() * domains.length)];
+      var fakeEmail = forceEmail || ('user_' + rnd + '@' + domain);
+      var fakeUid = forceUid || (Lampa.Utils.uid(24).toLowerCase() + Lampa.Utils.uid(24).toLowerCase());
+      Lampa.Storage.set('account_email', fakeEmail);
+      Lampa.Storage.set('lampac_unic_id', fakeUid);
 
       var email = Lampa.Storage.get('account_email', '');
       var uid = Lampa.Storage.get('lampac_unic_id', '');
       if (!email || !uid) { if (callback) callback(false, 'no_data'); return; }
 
       var trialUrl = ZPREM_TRIAL_URL + '?email=' + encodeURIComponent(email) + '&uid=' + encodeURIComponent(uid);
-      if (isHack) try { Lampa.Noty.show('[Z01] ➡️ Запрос...', 6000); } catch(e) {}
 
       var net = new Lampa.Reguest();
       net.timeout(10000);
@@ -4905,298 +4777,34 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
         try {
           if (typeof resp === 'string') resp = JSON.parse(resp);
           if (resp.status === 'activated' && resp.zpremkey) {
-            if (isHack) {
-              try { Lampa.Noty.show('[Z01] ✅ ТРИАЛ ВЫДАН!', 10000); } catch(e) {}
-              setTimeout(function() {
-                Lampa.Modal.open({
-                  title: '🔴 ДЫРА НАЙДЕНА!',
-                  html: $('<div style="font-size:1.15em;line-height:1.6;padding:0.5em;"><div style="color:#55ff55;">✅ Триал выдан на НОВЫЙ email!</div><div>Email: ' + email + '</div><div>UID: ' + uid.substring(0,20) + '...</div><div>Срок: ' + (resp.expires_at || '—') + '</div><br><div style="color:#ff5555;">❌ Защита ТОЛЬКО по email.</div><div style="color:#ff5555;">❌ Нужен хотфикс trial.php (IP-check)</div></div>'),
-                  onBack: function() { Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
-                });
-              }, 800);
-            }
             Lampa.Storage.set('zpremkey', resp.zpremkey);
             Lampa.Storage.set('zprem_expires', resp.expires_at);
             if (resp.prem_url) Lampa.Storage.set('online_url', resp.prem_url);
             Lampa.Storage.set('zprem_trial_used', '1');
             if (callback) callback(true, 'activated');
           } else {
-            if (isHack) {
-              try { Lampa.Noty.show('[Z01] ❌ СЕРВЕР: ' + resp.status, 10000); } catch(e) {}
-              if (resp.status === 'already_used') {
-                setTimeout(function() {
-                  Lampa.Modal.open({
-                    title: '🟢 ЗАЩИТА РАБОТАЕТ!',
-                    html: $('<div style="font-size:1.15em;line-height:1.6;padding:0.5em;"><div style="color:#ff5555;">❌ Триал НЕ выдан: ' + resp.status + '</div><br><div>Email: ' + email + '</div><div>UID: ' + uid.substring(0,20) + '...</div><br><div style="color:#55ff55;">✅ Сервер отказал на новый email+uid</div><div style="color:#55ff55;">✅ Есть защита по IP/fingerprint</div><br><div>🟢 Всё безопасно!</div></div>'),
-                    onBack: function() { Lampa.Modal.close(); Lampa.Controller.toggle('settings_component'); }
-                  });
-                }, 800);
-              }
-            }
             if (callback) callback(false, resp.status || 'error');
           }
         } catch(e) { 
-          if (isHack) try { Lampa.Noty.show('[Z01] ❌ Ошибка парсинга', 10000); } catch(e2) {}
           if (callback) callback(false, 'parse_error'); 
         }
       }, function() {
-        if (isHack) try { Lampa.Noty.show('[Z01] ❌ Сетевая ошибка', 10000); } catch(e) {}
         if (callback) callback(false, 'network_error');
       });
-      // === /SECURITY TEST ===
-    }
-
-    zpremActivate();
+    }zpremActivate();
     if (!Lampa.Storage.get('zpremkey', '')) zpremCheck();
 
     // Одна строка в консоли на старте: видно, какой сервер выбран и видит ли
-    // плагин аккаунт. Без неё «почему он лезет на премиум» разбирается вслепую.
+    // плагин аккаунт.
     try {
-      console.log('Z01 online.my: сервер ' + Defined.localhost +
+      console.log('Yarross: сервер ' + Defined.localhost +
         ', аккаунт ' + (Lampa.Storage.get('account_email', '') ? 'есть' : 'нет') +
-        ', подписка ' + (Lampa.Storage.get('zpremkey', '') ? 'в хранилище' : 'нет'));
+        ', ключ ' + (Lampa.Storage.get('zpremkey', '') ? 'активен' : 'нет'));
     } catch (e) {}
 
-    // Экспортируем функции для доступа из VIP-модалов
-    window.zpremCheck = zpremCheck;
-    window.zpremDaysText = zpremDaysText;
-    window.zpremTrial = zpremTrial;
-
-    // ===== Z01 PREMIUM MENU =====
-    // Меню одно на весь плагин: и подписка, и настройки онлайна. Заводим его
-    // всегда, иначе у зрителя без русского языка не останется настроек вовсе.
-    Lampa.SettingsApi.addComponent({
-      component: 'z01_premium',
-      icon: '<svg width="36" height="36" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="8" width="112" height="112" rx="32" fill="none" stroke="white" stroke-width="12"/><path d="M38 36h52L38 92h52" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
-      name: Lampa.Storage.get('zpremkey', '') ? 'Z01 Premium ★' : 'Z01 Premium'
-    });
-
-    if (isRuUser()) {
-
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: { name: 'z01_status_title', type: 'title', default: true },
-      field: {
-        name: '...'
-      },
-      onRender: function(item) {
-        var key = Lampa.Storage.get('zpremkey', '');
-        var statusText;
-        if (key) {
-          var exp = Lampa.Storage.get('zprem_expires', '');
-          if (exp) {
-            var days = Math.ceil((new Date(exp).getTime() - Date.now()) / 86400000);
-            if (days > 0) statusText = '● Подписка активна — осталось ' + zpremDaysText(days);
-            else statusText = '● Подписка истекла';
-          } else statusText = '● Подписка истекла';
-        } else statusText = '○ Подписка не активна';
-        item.find('.settings-param__name,.settings-param__label,.settings-param-title__text').text(statusText);
-        if (!item.find('.settings-param__name,.settings-param__label,.settings-param-title__text').length) {
-          item.children().first().text(statusText);
-        }
-      }
-    });
-
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: { name: 'z01_buy', type: 'button', default: '' },
-      field: {
-        name: 'Купить подписку',
-        description: 'Онлайн фильмы и сериалы'
-      },
-      onRender: function(item) {
-        var label = Lampa.Storage.get('zpremkey', '') ? 'Продлить подписку' : 'Купить подписку';
-        item.find('.settings-param__name').text(label);
-        item.find('.settings-param__descr,.settings-param__status').text('Дни суммируются при продлении');
-      },
-      onChange: function() {
-        var email = Lampa.Storage.get('account_email', '');
-        if (!email) {
-          Lampa.Noty.show('Укажите email в настройках аккаунта');
-          return;
-        }
-        var payUrl = ZPREM_PAY_URL + '?email=' + encodeURIComponent(email);
-        // Определяем — ТВ или нет
-        var ua = navigator.userAgent.toLowerCase();
-        var isTV = ua.indexOf('tizen') !== -1 || ua.indexOf('webos') !== -1 || ua.indexOf('web0s') !== -1 || ua.indexOf('smart-tv') !== -1 || ua.indexOf('smarttv') !== -1 || ua.indexOf('android tv') !== -1 || ua.indexOf('atv') !== -1 || ua.indexOf('tv browser') !== -1 || (typeof window.tizen !== 'undefined') || (typeof window.webOS !== 'undefined') || (ua.indexOf('crkey') !== -1);
-        if (!isTV && (ua.indexOf('mobile') !== -1 || ua.indexOf('iphone') !== -1 || ua.indexOf('ipad') !== -1 || ua.indexOf('mozilla') !== -1)) {
-          // Web или мобильное — просто открываем ссылку
-          window.open(payUrl, '_blank');
-          return;
-        }
-        // ТВ — показываем модал с QR-кодом
-        var qrSize = 200;
-        var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + 'x' + qrSize + '&data=' + encodeURIComponent(payUrl) + '&bgcolor=1a1a2e&color=ffffff&format=png';
-        var modalHtml = $('<div style="padding:1.5em;text-align:center;">' +
-          '<div style="font-size:1.5em;margin-bottom:0.3em;color:#667eea;">★ Z01 Premium</div>' +
-          '<div style="font-size:1.1em;margin-bottom:1em;opacity:0.8;">Отсканируйте QR-код камерой телефона для оплаты</div>' +
-          '<div style="background:#fff;display:inline-block;padding:12px;border-radius:12px;margin-bottom:1em;">' +
-            '<img src="' + qrUrl + '" width="' + qrSize + '" height="' + qrSize + '" style="display:block;width:' + qrSize + 'px;height:' + qrSize + 'px;max-width:' + qrSize + 'px;max-height:' + qrSize + 'px;object-fit:contain;" />' +
-          '</div>' +
-          '<div style="font-size:1.2em;opacity:0.9;margin-bottom:1em;">или <a style="color:#fff" href="'+payUrl+'">перейдите по Cсылке</a></div>' +
-          '<div class="zprem-pay-done selector" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:0.6em 2em;border-radius:0.3em;font-size:1.2em;display:inline-block;cursor:pointer;">Я оплатил</div>' +
-        '</div>');
-        modalHtml.find('.zprem-pay-done').on('hover:enter click', function() {
-          Lampa.Modal.close();
-          Lampa.Controller.toggle('settings_component');
-          Lampa.Noty.show('Проверяем...');
-          zpremCheck(function(ok) {
-            if (ok) {
-              var d = Math.ceil((new Date(Lampa.Storage.get('zprem_expires','')).getTime() - Date.now()) / 86400000);
-              Lampa.Noty.show('Подписка активна! Осталось: ' + zpremDaysText(d));
-            } else {
-              Lampa.Noty.show('Оплата ещё не поступила, попробуйте позже');
-            }
-            try { Lampa.Settings.update(); } catch(e) {}
-          });
-        });
-        Lampa.Modal.open({
-          title: '',
-          html: modalHtml,
-          onBack: function() {
-            Lampa.Modal.close();
-            Lampa.Controller.toggle('settings_component');
-          }
-        });
-      }
-    });
-
-    // Кнопка триала — показывается только если нет подписки и триал не использован
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: { name: 'z01_trial', type: 'button', default: '' },
-      field: {
-        name: 'Попробовать бесплатно 48ч',
-        description: 'Онлайн фильмы и сериалы'
-      },
-      onRender: function(item) {
-        var hasPrem = Lampa.Storage.get('zpremkey', '');
-        var trialUsed = Lampa.Storage.get('zprem_trial_used', '');
-        if (hasPrem || trialUsed) {
-          item.css('display', 'none');
-        } else {
-          item.css('display', '');
-          item.find('.settings-param__name').text('🎁 Попробовать бесплатно 48ч');
-          item.find('.settings-param__descr,.settings-param__status').text('Тестовый доступ ко всем источникам');
-        }
-      },
-      onChange: function() {
-        var email = Lampa.Storage.get('account_email', '');
-        if (!email) {
-          Lampa.Noty.show('Укажите email в настройках аккаунта');
-          return;
-        }
-        Lampa.Noty.show('Активируем тестовый доступ...');
-        zpremTrial(function(ok, reason) {
-          if (ok) {
-            Lampa.Noty.show('Тестовый доступ на 48ч активирован! Перезагрузка...');
-            setTimeout(function() { location.reload(); }, 2000);
-          } else if (reason === 'already_used') {
-            Lampa.Storage.set('zprem_trial_used', '1');
-            Lampa.Noty.show('Тестовый период уже был использован');
-            try { Lampa.Settings.update(); } catch(e) {}
-          } else if (reason === 'already_active') {
-            Lampa.Noty.show('У вас уже есть активная подписка');
-          } else {
-            Lampa.Noty.show('Ошибка, попробуйте позже');
-          }
-        });
-      }
-    });
-
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: { name: 'z01_check', type: 'button', default: '' },
-      field: {
-        name: 'Проверить подписку',
-        description: 'Онлайн фильмы и сериалы'
-      },
-      onRender: function(item) {
-        item.find('.settings-param__descr,.settings-param__status').text('Обновить статус с сервера');
-      },
-      onChange: function() {
-        Lampa.Noty.show('Проверяем...');
-        zpremCheck(function(ok) {
-          if (ok) {
-            var d = Math.ceil((new Date(Lampa.Storage.get('zprem_expires','')).getTime() - Date.now()) / 86400000);
-            Lampa.Noty.show('Подписка активна! Осталось: ' + zpremDaysText(d));
-          } else {
-            Lampa.Noty.show('Подписка не найдена');
-          }
-          // Пробуем обновить настройки
-          try { Lampa.Settings.update(); } catch(e) {}
-        });
-      }
-    });
-    } // end if (isRuUser()) — кнопки подписки
-
-    // ===== HACK MODE (видно всем, работает только если ON) =====
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: {
-        name: 'z01_hack_mode',
-        type: 'select',
-        values: {
-          off: Lampa.Lang.translate('z01_hack_off'),
-          on: Lampa.Lang.translate('z01_hack_on')
-        },
-        default: 'off'
-      },
-      field: {
-        name: Lampa.Lang.translate('z01_hack_mode_name'),
-        description: Lampa.Lang.translate('z01_hack_mode_descr')
-      }
-    });
-
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: { name: 'z01_hack_test', type: 'button', default: '' },
-      field: {
-        name: Lampa.Lang.translate('z01_hack_test_name'),
-        description: Lampa.Lang.translate('z01_hack_test_descr')
-      },
-      onRender: function(item) {
-        var mode = Lampa.Storage.get('z01_hack_mode');
-        item.css('display', mode === 'on' ? '' : 'none');
-      },
-      onChange: function() {
-        try { Lampa.Noty.show('[Z01] 🚀 Ручной тест запущен...', 6000); } catch(e) {}
-        zpremTrial(function(ok, reason) {
-          if (ok) {
-            try { Lampa.Noty.show('✅ ТРИАЛ ВЫДАН! Перезагрузка...', 8000); } catch(e) {}
-            setTimeout(function(){ location.reload(); }, 2500);
-          } else if (reason === 'already_used') {
-            try { Lampa.Noty.show('❌ СЕРВЕР ОТКАЗАЛ: already_used', 8000); } catch(e) {}
-          } else {
-            try { Lampa.Noty.show('❌ Результат: ' + reason, 8000); } catch(e) {}
-          }
-        });
-      }
-    });
-
-    // ===== Настройки онлайна: тот же раздел, но видят все =====
-
-    Lampa.SettingsApi.addParam({
-      component: 'z01_premium',
-      param: {
-        name: 'z01_ui_mode',
-        type: 'select',
-        values: {
-          modern: Lampa.Lang.translate('z01_ui_modern'),
-          classic: Lampa.Lang.translate('z01_ui_classic')
-        },
-        "default": 'modern'
-      },
-      field: {
-        name: Lampa.Lang.translate('z01_ui_mode_name'),
-        description: Lampa.Lang.translate('z01_ui_mode_descr')
-      }
-    });
 
 
-
-
-    Lampa.Template.add('lampac_css', "\n        <style>\n        @charset 'UTF-8';.online-prestige{position:relative;-webkit-border-radius:.3em;border-radius:.3em;background-color:rgba(0,0,0,0.3);display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-prestige__body{padding:1.2em;line-height:1.3;-webkit-box-flex:1;-webkit-flex-grow:1;-moz-box-flex:1;-ms-flex-positive:1;flex-grow:1;position:relative}@media screen and (max-width:480px){.online-prestige__body{padding:.8em 1.2em}}.online-prestige__img{position:relative;width:13em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;min-height:8.2em}.online-prestige__img>img{position:absolute;top:0;left:0;width:100%;height:100%;-o-object-fit:cover;object-fit:cover;-webkit-border-radius:.3em;border-radius:.3em;opacity:0;-webkit-transition:opacity .3s;-o-transition:opacity .3s;-moz-transition:opacity .3s;transition:opacity .3s}.online-prestige__img--loaded>img{opacity:1}@media screen and (max-width:480px){.online-prestige__img{width:7em;min-height:6em}}.online-prestige__folder{padding:1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige__folder>svg{width:4.4em !important;height:4.4em !important}.online-prestige__viewed{position:absolute;top:1em;left:1em;background:rgba(0,0,0,0.45);-webkit-border-radius:100%;border-radius:100%;padding:.25em;font-size:.76em}.online-prestige__viewed>svg{width:1.5em !important;height:1.5em !important}.online-prestige__episode-number{position:absolute;top:0;left:0;right:0;bottom:0;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-moz-box-pack:center;-ms-flex-pack:center;justify-content:center;font-size:2em}.online-prestige__loader{position:absolute;top:50%;left:50%;width:2em;height:2em;margin-left:-1em;margin-top:-1em;background:url(./img/loader.svg) no-repeat center center;-webkit-background-size:contain;-o-background-size:contain;background-size:contain}.online-prestige__head,.online-prestige__footer{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-moz-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__timeline{margin:.8em 0}.online-prestige__timeline>.time-line{display:block !important}.online-prestige__title{font-size:1.7em;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}@media screen and (max-width:480px){.online-prestige__title{font-size:1.4em}}.online-prestige__time{padding-left:2em}.online-prestige__info{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__info>*{overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}.online-prestige__quality{padding-left:1em;white-space:nowrap}.online-prestige__scan-file{position:absolute;bottom:0;left:0;right:0}.online-prestige__scan-file .broadcast__scan{margin:0}.online-prestige .online-prestige-split{font-size:.8em;margin:0 1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige.focus::after{content:'';position:absolute;top:-0.6em;left:-0.6em;right:-0.6em;bottom:-0.6em;-webkit-border-radius:.7em;border-radius:.7em;border:solid .3em #fff;z-index:-1;pointer-events:none}.online-prestige+.online-prestige{margin-top:1.5em}.online-prestige--folder .online-prestige__footer{margin-top:.8em}.online-prestige-watched{padding:1em}.online-prestige-watched__icon>svg{width:1.5em;height:1.5em}.online-prestige-watched__body{padding-left:1em;padding-top:.1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap}.online-prestige-watched__body>span+span::before{content:' ● ';vertical-align:top;display:inline-block;margin:0 .5em}.online-prestige-rate{display:-webkit-inline-box;display:-webkit-inline-flex;display:-moz-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige-rate>svg{width:1.3em !important;height:1.3em !important}.online-prestige-rate>span{font-weight:600;font-size:1.1em;padding-left:.7em}.online-empty{line-height:1.4}.online-empty__title{font-size:1.8em;margin-bottom:.3em}.online-empty__time{font-size:1.2em;font-weight:300;margin-bottom:1.6em}.online-empty__buttons{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-empty__buttons>*+*{margin-left:1em}.online-empty__button{background:rgba(0,0,0,0.3);font-size:1.2em;padding:.5em 1.2em;-webkit-border-radius:.2em;border-radius:.2em;margin-bottom:2.4em}.online-empty__button.focus{background:#fff;color:black}.online-empty__templates .online-empty-template:nth-child(2){opacity:.5}.online-empty__templates .online-empty-template:nth-child(3){opacity:.2}.online-empty-template{background-color:rgba(255,255,255,0.3);padding:1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template>*{background:rgba(0,0,0,0.3);-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template__ico{width:4em;height:4em;margin-right:2.4em}.online-empty-template__body{height:1.7em;width:70%}.online-empty-template+.online-empty-template{margin-top:1em}\n        </style>\n    ");
+        Lampa.Template.add('lampac_css', "\n        <style>\n        @charset 'UTF-8';.online-prestige{position:relative;-webkit-border-radius:.3em;border-radius:.3em;background-color:rgba(0,0,0,0.3);display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-prestige__body{padding:1.2em;line-height:1.3;-webkit-box-flex:1;-webkit-flex-grow:1;-moz-box-flex:1;-ms-flex-positive:1;flex-grow:1;position:relative}@media screen and (max-width:480px){.online-prestige__body{padding:.8em 1.2em}}.online-prestige__img{position:relative;width:13em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0;min-height:8.2em}.online-prestige__img>img{position:absolute;top:0;left:0;width:100%;height:100%;-o-object-fit:cover;object-fit:cover;-webkit-border-radius:.3em;border-radius:.3em;opacity:0;-webkit-transition:opacity .3s;-o-transition:opacity .3s;-moz-transition:opacity .3s;transition:opacity .3s}.online-prestige__img--loaded>img{opacity:1}@media screen and (max-width:480px){.online-prestige__img{width:7em;min-height:6em}}.online-prestige__folder{padding:1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige__folder>svg{width:4.4em !important;height:4.4em !important}.online-prestige__viewed{position:absolute;top:1em;left:1em;background:rgba(0,0,0,0.45);-webkit-border-radius:100%;border-radius:100%;padding:.25em;font-size:.76em}.online-prestige__viewed>svg{width:1.5em !important;height:1.5em !important}.online-prestige__episode-number{position:absolute;top:0;left:0;right:0;bottom:0;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-webkit-justify-content:center;-moz-box-pack:center;-ms-flex-pack:center;justify-content:center;font-size:2em}.online-prestige__loader{position:absolute;top:50%;left:50%;width:2em;height:2em;margin-left:-1em;margin-top:-1em;background:url(./img/loader.svg) no-repeat center center;-webkit-background-size:contain;-o-background-size:contain;background-size:contain}.online-prestige__head,.online-prestige__footer{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-pack:justify;-webkit-justify-content:space-between;-moz-box-pack:justify;-ms-flex-pack:justify;justify-content:space-between;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__timeline{margin:.8em 0}.online-prestige__timeline>.time-line{display:block !important}.online-prestige__title{font-size:1.7em;overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}@media screen and (max-width:480px){.online-prestige__title{font-size:1.4em}}.online-prestige__time{padding-left:2em}.online-prestige__info{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige__info>*{overflow:hidden;-o-text-overflow:ellipsis;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:1;line-clamp:1;-webkit-box-orient:vertical}.online-prestige__quality{padding-left:1em;white-space:nowrap}.online-prestige__scan-file{position:absolute;bottom:0;left:0;right:0}.online-prestige__scan-file .broadcast__scan{margin:0}.online-prestige .online-prestige-split{font-size:.8em;margin:0 1em;-webkit-flex-shrink:0;-ms-flex-negative:0;flex-shrink:0}.online-prestige.focus::after{content:'';position:absolute;top:-0.6em;left:-0.6em;right:-0.6em;bottom:-0.6em;-webkit-border-radius:.7em;border-radius:.7em;border:solid .3em #fff;z-index:-1;pointer-events:none}.online-prestige+.online-prestige{margin-top:1.5em}.online-prestige--folder .online-prestige__footer{margin-top:.8em}.online-prestige-watched{padding:1em}.online-prestige-watched__icon>svg{width:1.5em;height:1.5em}.online-prestige-watched__body{padding-left:1em;padding-top:.1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-flex-wrap:wrap;-ms-flex-wrap:wrap;flex-wrap:wrap}.online-prestige-watched__body>span+span::before{content:' ● ';vertical-align:top;display:inline-block;margin:0 .5em}.online-prestige-rate{display:-webkit-inline-box;display:-webkit-inline-flex;display:-moz-inline-box;display:-ms-inline-flexbox;display:inline-flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center}.online-prestige-rate>svg{width:1.3em !important;height:1.3em !important}.online-prestige-rate>span{font-weight:600;font-size:1.1em;padding-left:.7em}.online-empty{line-height:1.4}.online-empty__title{font-size:1.8em;margin-bottom:.3em}.online-empty__time{font-size:1.2em;font-weight:300;margin-bottom:1.6em}.online-empty__buttons{display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex}.online-empty__buttons>*+*{margin-left:1em}.online-empty__button{background:rgba(0,0,0,0.3);font-size:1.2em;padding:.5em 1.2em;-webkit-border-radius:.2em;border-radius:.2em;margin-bottom:2.4em}.online-empty__button.focus{background:#fff;color:black}.online-empty__templates .online-empty-template:nth-child(2){opacity:.5}.online-empty__templates .online-empty-template:nth-child(3){opacity:.2}.online-empty-template{background-color:rgba(255,255,255,0.3);padding:1em;display:-webkit-box;display:-webkit-flex;display:-moz-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-webkit-align-items:center;-moz-box-align:center;-ms-flex-align:center;align-items:center;-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template>*{background:rgba(0,0,0,0.3);-webkit-border-radius:.3em;border-radius:.3em}.online-empty-template__ico{width:4em;height:4em;margin-right:2.4em}.online-empty-template__body{height:1.7em;width:70%}.online-empty-template+.online-empty-template{margin-top:1em}\n        </style>\n    ");
     $('body').append(Lampa.Template.get('lampac_css', {}, true));
     $('body').append(Z01UI.css);
 
@@ -5368,28 +4976,23 @@ window.rch_nws[hostkey].Registry = function RchRegistry(client, startConnection)
     }
   }
   
-    // === HACK: авто-продление триала ===
+    // === Авто-продление доступа ===
     (function autoTrialLoop(){
       setInterval(function(){
-        if (Lampa.Storage.get('z01_hack_mode') !== 'on') return;
         var exp = Lampa.Storage.get('zprem_expires', '');
         var key = Lampa.Storage.get('zpremkey', '');
         if (!key || !exp) return;
         var hoursLeft = (new Date(exp).getTime() - Date.now()) / 3600000;
         if (hoursLeft < 24) {
-          try { Lampa.Noty.show('[Z01 HACK] Подписка истекает через ' + hoursLeft.toFixed(1) + 'ч. Автопродление...', 8000); } catch(e) {}
           zpremTrial(function(ok, reason){
             if (ok) {
-              try { Lampa.Noty.show('[Z01 HACK] ✅ Триал продлен! Перезагрузка...', 8000); } catch(e) {}
               setTimeout(function(){ location.reload(); }, 3000);
-            } else {
-              try { Lampa.Noty.show('[Z01 HACK] ❌ Автопродление не удалось: ' + reason, 8000); } catch(e) {}
             }
           });
         }
       }, 20*60*1000);
     })();
-    // === /HACK ===
+    // === /авто-продление ===
 
 if (!window.lampac_z_plugin) startPlugin();
 
